@@ -4,7 +4,8 @@ finance_tracker_build_order.html
 PLAN.md
 
 
-
+*.db
+data/
 
 
 

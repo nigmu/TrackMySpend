@@ -1,0 +1,432 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+.wrap{display:flex;gap:0;min-height:520px;border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);overflow:hidden;font-family:var(--font-sans)}
+.sidebar{width:220px;flex-shrink:0;border-right:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary);overflow-y:auto}
+.detail{flex:1;background:var(--color-background-primary);overflow-y:auto}
+.group-header{padding:8px 12px 4px;font-size:10px;font-weight:500;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:0.06em;margin-top:4px}
+.tbl-btn{display:block;width:100%;text-align:left;padding:6px 12px 6px 16px;font-size:12px;color:var(--color-text-secondary);background:none;border:none;cursor:pointer;border-left:2px solid transparent;transition:all 0.1s}
+.tbl-btn:hover{background:var(--color-background-primary);color:var(--color-text-primary)}
+.tbl-btn.active{background:var(--color-background-primary);color:var(--color-text-primary);border-left-color:#1D9E75;font-weight:500}
+.detail-empty{display:flex;align-items:center;justify-content:center;height:100%;color:var(--color-text-tertiary);font-size:13px}
+.detail-head{padding:16px 18px 10px;border-bottom:0.5px solid var(--color-border-tertiary)}
+.detail-tname{font-size:15px;font-weight:500;color:var(--color-text-primary);font-family:var(--font-mono)}
+.detail-desc{font-size:12px;color:var(--color-text-secondary);margin-top:3px}
+.col-table{width:100%;border-collapse:collapse;font-size:12px}
+.col-table th{padding:6px 18px;text-align:left;font-size:10px;font-weight:500;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:0.05em;border-bottom:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary)}
+.col-table td{padding:7px 18px;border-bottom:0.5px solid var(--color-border-tertiary);vertical-align:top;color:var(--color-text-primary)}
+.col-table tr:last-child td{border-bottom:none}
+.col-table tr:hover td{background:var(--color-background-secondary)}
+.col-name{font-family:var(--font-mono);font-size:11.5px;color:var(--color-text-primary)}
+.col-type{font-family:var(--font-mono);font-size:11px;color:#185FA5}
+.badge{display:inline-block;font-size:9px;padding:1px 5px;border-radius:3px;font-weight:500;margin-left:4px;vertical-align:middle}
+.pk{background:#EAF3DE;color:#27500A}
+.fk{background:#E6F1FB;color:#0C447C}
+.uq{background:#FAEEDA;color:#633806}
+.nn{background:#F1EFE8;color:#444441}
+.col-notes{font-size:11px;color:var(--color-text-secondary);line-height:1.4}
+.fk-refs{display:block;font-size:10px;color:#185FA5;margin-top:2px;font-family:var(--font-mono)}
+@media(prefers-color-scheme:dark){
+.pk{background:#173404;color:#C0DD97}
+.fk{background:#042C53;color:#B5D4F4}
+.uq{background:#412402;color:#FAC775}
+.nn{background:#2C2C2A;color:#D3D1C7}
+.col-type{color:#85B7EB}
+.fk-refs{color:#85B7EB}
+}
+</style>
+
+<h2 class="sr-only">SQLite database schema explorer — click a table in the sidebar to view its columns</h2>
+
+<div class="wrap">
+  <div class="sidebar" id="sidebar"></div>
+  <div class="detail" id="detail"><div class="detail-empty">Select a table to view its schema</div></div>
+</div>
+
+<script>
+const schema = [
+  {
+    group:"Auth & user",
+    tables:[
+      {
+        name:"users",
+        desc:"Single user record — auth credentials and preferences",
+        cols:[
+          {n:"id",t:"INTEGER",badges:["pk"],notes:"Auto-increment primary key"},
+          {n:"username",t:"TEXT",badges:["nn","uq"],notes:""},
+          {n:"password_hash",t:"TEXT",badges:["nn"],notes:"bcrypt hash"},
+          {n:"pin_hash",t:"TEXT",badges:[],notes:"Optional short PIN for quick re-lock"},
+          {n:"session_timeout_min",t:"INTEGER",badges:[],notes:"Default 30"},
+          {n:"created_at",t:"TEXT",badges:["nn"],notes:"ISO 8601 datetime"},
+          {n:"last_login_at",t:"TEXT",badges:[],notes:""},
+        ]
+      }
+    ]
+  },
+  {
+    group:"Ingestion",
+    tables:[
+      {
+        name:"email_accounts",
+        desc:"Gmail accounts connected via OAuth",
+        cols:[
+          {n:"id",t:"INTEGER",badges:["pk"],notes:""},
+          {n:"user_id",t:"INTEGER",badges:["fk","nn"],notes:"→ users.id",ref:"users.id"},
+          {n:"email_address",t:"TEXT",badges:["nn","uq"],notes:""},
+          {n:"oauth_access_token",t:"TEXT",badges:["nn"],notes:"Encrypted at rest"},
+          {n:"oauth_refresh_token",t:"TEXT",badges:["nn"],notes:"Encrypted at rest"},
+          {n:"polling_interval_min",t:"INTEGER",badges:[],notes:"Default 60"},
+          {n:"last_polled_at",t:"TEXT",badges:[],notes:""},
+          {n:"is_active",t:"INTEGER",badges:[],notes:"0 or 1, default 1"},
+          {n:"created_at",t:"TEXT",badges:["nn"],notes:""},
+        ]
+      },
+      {
+        name:"parse_jobs",
+        desc:"One row per parse attempt — email, SMS, import or backfill",
+        cols:[
+          {n:"id",t:"INTEGER",badges:["pk"],notes:""},
+          {n:"email_account_id",t:"INTEGER",badges:["fk"],notes:"→ email_accounts.id, nullable",ref:"email_accounts.id"},
+          {n:"source_type",t:"TEXT",badges:["nn"],notes:"'email' | 'sms' | 'import' | 'backfill'"},
+          {n:"status",t:"TEXT",badges:["nn"],notes:"'pending' | 'running' | 'success' | 'failed'"},
+          {n:"input_preview",t:"TEXT",badges:[],notes:"First 500 chars of raw input"},
+          {n:"llm_input",t:"TEXT",badges:[],notes:"Full prompt sent to LLM"},
+          {n:"llm_output",t:"TEXT",badges:[],notes:"Raw LLM response"},
+          {n:"transactions_extracted",t:"INTEGER",badges:[],notes:"Count, default 0"},
+          {n:"error_message",t:"TEXT",badges:[],notes:"Populated on failure"},
+          {n:"started_at",t:"TEXT",badges:[],notes:""},
+          {n:"completed_at",t:"TEXT",badges:[],notes:""},
+        ]
+      }
+    ]
+  },
+  {
+    group:"Banking",
+    tables:[
+      {
+        name:"bank_accounts",
+        desc:"Each bank account or credit card the user owns",
+        cols:[
+          {n:"id",t:"INTEGER",badges:["pk"],notes:""},
+          {n:"user_id",t:"INTEGER",badges:["fk","nn"],notes:"→ users.id",ref:"users.id"},
+          {n:"display_name",t:"TEXT",badges:["nn"],notes:"e.g. 'HDFC Savings', 'Axis CC'"},
+          {n:"account_type",t:"TEXT",badges:["nn"],notes:"'savings' | 'current' | 'credit_card' | 'wallet'"},
+          {n:"bank_name",t:"TEXT",badges:[],notes:""},
+          {n:"account_number_masked",t:"TEXT",badges:[],notes:"Last 4 digits only"},
+          {n:"credit_limit",t:"REAL",badges:[],notes:"Credit cards only"},
+          {n:"billing_cycle_day",t:"INTEGER",badges:[],notes:"Statement generation day of month"},
+          {n:"due_day",t:"INTEGER",badges:[],notes:"Payment due day of month"},
+          {n:"current_balance",t:"REAL",badges:[],notes:"Manually updated snapshot"},
+          {n:"balance_updated_at",t:"TEXT",badges:[],notes:""},
+          {n:"is_active",t:"INTEGER",badges:[],notes:"Default 1"},
+          {n:"created_at",t:"TEXT",badges:["nn"],notes:""},
+        ]
+      }
+    ]
+  },
+  {
+    group:"Merchants & categories",
+    tables:[
+      {
+        name:"categories",
+        desc:"Spending categories — supports one level of sub-categories via parent_id",
+        cols:[
+          {n:"id",t:"INTEGER",badges:["pk"],notes:""},
+          {n:"name",t:"TEXT",badges:["nn"],notes:"e.g. 'Food', 'Health'"},
+          {n:"parent_id",t:"INTEGER",badges:["fk"],notes:"→ categories.id self-ref, null = top-level",ref:"categories.id"},
+          {n:"color",t:"TEXT",badges:[],notes:"Hex string for UI"},
+          {n:"icon",t:"TEXT",badges:[],notes:"Icon identifier"},
+          {n:"is_system",t:"INTEGER",badges:[],notes:"1 = pre-loaded default, 0 = user-created"},
+          {n:"is_active",t:"INTEGER",badges:[],notes:"Soft-delete via 0"},
+          {n:"created_at",t:"TEXT",badges:["nn"],notes:""},
+        ]
+      },
+      {
+        name:"merchants",
+        desc:"Shops, people, services — mapped to UPI IDs / account numbers",
+        cols:[
+          {n:"id",t:"INTEGER",badges:["pk"],notes:""},
+          {n:"display_name",t:"TEXT",badges:["nn"],notes:"e.g. 'Blinkit', 'Rohit'"},
+          {n:"canonical_name",t:"TEXT",badges:[],notes:"Normalised lowercase for dedup"},
+          {n:"identifiers",t:"TEXT",badges:[],notes:"JSON array of UPI IDs, account numbers, VPAs"},
+          {n:"default_category_id",t:"INTEGER",badges:["fk"],notes:"→ categories.id",ref:"categories.id"},
+          {n:"alias",t:"TEXT",badges:[],notes:"User-given nickname"},
+          {n:"notes",t:"TEXT",badges:[],notes:"Free-text profile notes"},
+          {n:"is_verified",t:"INTEGER",badges:[],notes:"0 = auto-detected, 1 = manually confirmed"},
+          {n:"created_at",t:"TEXT",badges:["nn"],notes:""},
+          {n:"updated_at",t:"TEXT",badges:[],notes:""},
+        ]
+      },
+      {
+        name:"tags",
+        desc:"Free-form labels that cut across categories",
+        cols:[
+          {n:"id",t:"INTEGER",badges:["pk"],notes:""},
+          {n:"name",t:"TEXT",badges:["nn","uq"],notes:"e.g. 'birthday-party', 'goa-trip'"},
+          {n:"created_at",t:"TEXT",badges:["nn"],notes:""},
+        ]
+      }
+    ]
+  },
+  {
+    group:"Transactions",
+    tables:[
+      {
+        name:"transactions",
+        desc:"Core table — every debit and credit across all accounts",
+        cols:[
+          {n:"id",t:"INTEGER",badges:["pk"],notes:""},
+          {n:"user_id",t:"INTEGER",badges:["fk","nn"],notes:"→ users.id",ref:"users.id"},
+          {n:"bank_account_id",t:"INTEGER",badges:["fk","nn"],notes:"→ bank_accounts.id",ref:"bank_accounts.id"},
+          {n:"merchant_id",t:"INTEGER",badges:["fk"],notes:"→ merchants.id, nullable",ref:"merchants.id"},
+          {n:"category_id",t:"INTEGER",badges:["fk"],notes:"→ categories.id, nullable",ref:"categories.id"},
+          {n:"amount",t:"REAL",badges:["nn"],notes:"Always positive; direction col tells debit/credit"},
+          {n:"direction",t:"TEXT",badges:["nn"],notes:"'debit' | 'credit'"},
+          {n:"txn_type",t:"TEXT",badges:[],notes:"'upi' | 'neft' | 'imps' | 'rtgs' | 'cash' | 'emi' | 'credit_card' | 'transfer'"},
+          {n:"description",t:"TEXT",badges:[],notes:"Raw text from email / SMS"},
+          {n:"notes",t:"TEXT",badges:[],notes:"User-written annotation"},
+          {n:"txn_date",t:"TEXT",badges:["nn"],notes:"Actual transaction date"},
+          {n:"value_date",t:"TEXT",badges:[],notes:"Settlement / value date"},
+          {n:"reference_number",t:"TEXT",badges:[],notes:"Bank ref / UTR number"},
+          {n:"balance_after",t:"REAL",badges:[],notes:"Account balance after this txn"},
+          {n:"source",t:"TEXT",badges:["nn"],notes:"'email' | 'sms' | 'manual' | 'import'"},
+          {n:"parse_job_id",t:"INTEGER",badges:["fk"],notes:"→ parse_jobs.id, nullable",ref:"parse_jobs.id"},
+          {n:"is_transfer",t:"INTEGER",badges:[],notes:"1 = between own accounts, exclude from P&L"},
+          {n:"is_deleted",t:"INTEGER",badges:[],notes:"Soft delete flag"},
+          {n:"deleted_at",t:"TEXT",badges:[],notes:""},
+          {n:"created_at",t:"TEXT",badges:["nn"],notes:""},
+          {n:"updated_at",t:"TEXT",badges:[],notes:""},
+        ]
+      },
+      {
+        name:"transaction_tags",
+        desc:"Many-to-many junction — transactions to tags",
+        cols:[
+          {n:"transaction_id",t:"INTEGER",badges:["pk","fk"],notes:"→ transactions.id",ref:"transactions.id"},
+          {n:"tag_id",t:"INTEGER",badges:["pk","fk"],notes:"→ tags.id",ref:"tags.id"},
+        ]
+      },
+      {
+        name:"transaction_attachments",
+        desc:"Receipt photos or files attached to a transaction",
+        cols:[
+          {n:"id",t:"INTEGER",badges:["pk"],notes:""},
+          {n:"transaction_id",t:"INTEGER",badges:["fk","nn"],notes:"→ transactions.id",ref:"transactions.id"},
+          {n:"file_path",t:"TEXT",badges:["nn"],notes:"Relative path on disk"},
+          {n:"file_type",t:"TEXT",badges:[],notes:"'image' | 'pdf' | 'other'"},
+          {n:"created_at",t:"TEXT",badges:["nn"],notes:""},
+        ]
+      }
+    ]
+  },
+  {
+    group:"Splits",
+    tables:[
+      {
+        name:"splits",
+        desc:"A split bucket tied to a parent transaction",
+        cols:[
+          {n:"id",t:"INTEGER",badges:["pk"],notes:""},
+          {n:"parent_txn_id",t:"INTEGER",badges:["fk","nn"],notes:"→ transactions.id",ref:"transactions.id"},
+          {n:"total_amount",t:"REAL",badges:["nn"],notes:"Original full amount paid"},
+          {n:"user_share",t:"REAL",badges:["nn"],notes:"What the user actually owes after split"},
+          {n:"notes",t:"TEXT",badges:[],notes:"e.g. 'Goa hotel split'"},
+          {n:"status",t:"TEXT",badges:["nn"],notes:"'open' | 'partial' | 'settled'"},
+          {n:"created_at",t:"TEXT",badges:["nn"],notes:""},
+          {n:"updated_at",t:"TEXT",badges:[],notes:""},
+        ]
+      },
+      {
+        name:"split_participants",
+        desc:"One row per person who owes money in a split",
+        cols:[
+          {n:"id",t:"INTEGER",badges:["pk"],notes:""},
+          {n:"split_id",t:"INTEGER",badges:["fk","nn"],notes:"→ splits.id",ref:"splits.id"},
+          {n:"person_name",t:"TEXT",badges:["nn"],notes:""},
+          {n:"merchant_id",t:"INTEGER",badges:["fk"],notes:"→ merchants.id if person has a known UPI",ref:"merchants.id"},
+          {n:"owed_amount",t:"REAL",badges:["nn"],notes:"How much this person owes"},
+          {n:"paid_amount",t:"REAL",badges:[],notes:"Running total received, default 0"},
+          {n:"status",t:"TEXT",badges:["nn"],notes:"'pending' | 'partial' | 'settled'"},
+          {n:"created_at",t:"TEXT",badges:["nn"],notes:""},
+          {n:"updated_at",t:"TEXT",badges:[],notes:""},
+        ]
+      },
+      {
+        name:"split_settlements",
+        desc:"Each incoming payment that clears part of a split",
+        cols:[
+          {n:"id",t:"INTEGER",badges:["pk"],notes:""},
+          {n:"split_participant_id",t:"INTEGER",badges:["fk","nn"],notes:"→ split_participants.id",ref:"split_participants.id"},
+          {n:"transaction_id",t:"INTEGER",badges:["fk","nn"],notes:"→ transactions.id (the credit txn)",ref:"transactions.id"},
+          {n:"amount",t:"REAL",badges:["nn"],notes:"Amount applied to this settlement"},
+          {n:"settled_at",t:"TEXT",badges:["nn"],notes:""},
+          {n:"notes",t:"TEXT",badges:[],notes:""},
+        ]
+      }
+    ]
+  },
+  {
+    group:"Income & planning",
+    tables:[
+      {
+        name:"income_sources",
+        desc:"Salary, freelance, rent, dividends — each tracked separately",
+        cols:[
+          {n:"id",t:"INTEGER",badges:["pk"],notes:""},
+          {n:"name",t:"TEXT",badges:["nn"],notes:"e.g. 'Primary salary', 'Freelance client X'"},
+          {n:"type",t:"TEXT",badges:["nn"],notes:"'salary' | 'freelance' | 'rental' | 'dividend' | 'other'"},
+          {n:"expected_amount",t:"REAL",badges:[],notes:""},
+          {n:"bank_account_id",t:"INTEGER",badges:["fk"],notes:"→ bank_accounts.id, nullable",ref:"bank_accounts.id"},
+          {n:"expected_day_type",t:"TEXT",badges:[],notes:"'last_working_day' | 'fixed_date' | 'manual'"},
+          {n:"expected_date",t:"INTEGER",badges:[],notes:"Day of month if fixed_date"},
+          {n:"is_active",t:"INTEGER",badges:[],notes:"Default 1"},
+          {n:"created_at",t:"TEXT",badges:["nn"],notes:""},
+        ]
+      },
+      {
+        name:"salary_config",
+        desc:"Last-working-day rules for a salary income source",
+        cols:[
+          {n:"id",t:"INTEGER",badges:["pk"],notes:""},
+          {n:"income_source_id",t:"INTEGER",badges:["fk","nn","uq"],notes:"→ income_sources.id",ref:"income_sources.id"},
+          {n:"working_days",t:"TEXT",badges:[],notes:"JSON array e.g. [1,2,3,4,5] = Mon–Fri"},
+          {n:"last_day_override",t:"TEXT",badges:[],notes:"Manual override date for next pay day"},
+          {n:"updated_at",t:"TEXT",badges:[],notes:""},
+        ]
+      },
+      {
+        name:"holidays",
+        desc:"Public and custom holidays that affect last-working-day calc",
+        cols:[
+          {n:"id",t:"INTEGER",badges:["pk"],notes:""},
+          {n:"date",t:"TEXT",badges:["nn","uq"],notes:"ISO date YYYY-MM-DD"},
+          {n:"name",t:"TEXT",badges:["nn"],notes:"e.g. 'Diwali', 'Republic Day'"},
+          {n:"created_at",t:"TEXT",badges:["nn"],notes:""},
+        ]
+      },
+      {
+        name:"budgets",
+        desc:"Spending limits per category per period",
+        cols:[
+          {n:"id",t:"INTEGER",badges:["pk"],notes:""},
+          {n:"category_id",t:"INTEGER",badges:["fk","nn"],notes:"→ categories.id",ref:"categories.id"},
+          {n:"period_type",t:"TEXT",badges:["nn"],notes:"'monthly' | 'quarterly' | 'yearly'"},
+          {n:"amount",t:"REAL",badges:["nn"],notes:"Limit in INR"},
+          {n:"alert_threshold_pct",t:"INTEGER",badges:[],notes:"Alert at x% of budget, default 80"},
+          {n:"is_active",t:"INTEGER",badges:[],notes:"Default 1"},
+          {n:"created_at",t:"TEXT",badges:["nn"],notes:""},
+          {n:"updated_at",t:"TEXT",badges:[],notes:""},
+        ]
+      },
+      {
+        name:"recurring_transactions",
+        desc:"Auto-detected or manually added recurring debits",
+        cols:[
+          {n:"id",t:"INTEGER",badges:["pk"],notes:""},
+          {n:"merchant_id",t:"INTEGER",badges:["fk"],notes:"→ merchants.id, nullable",ref:"merchants.id"},
+          {n:"category_id",t:"INTEGER",badges:["fk"],notes:"→ categories.id, nullable",ref:"categories.id"},
+          {n:"label",t:"TEXT",badges:[],notes:"e.g. 'Netflix subscription'"},
+          {n:"expected_amount",t:"REAL",badges:[],notes:""},
+          {n:"amount_tolerance_pct",t:"INTEGER",badges:[],notes:"Fuzzy match tolerance, default 5"},
+          {n:"frequency",t:"TEXT",badges:["nn"],notes:"'weekly' | 'monthly' | 'quarterly' | 'yearly'"},
+          {n:"expected_day",t:"INTEGER",badges:[],notes:"Day of month"},
+          {n:"last_seen_at",t:"TEXT",badges:[],notes:""},
+          {n:"next_expected_at",t:"TEXT",badges:[],notes:""},
+          {n:"auto_detected",t:"INTEGER",badges:[],notes:"1 = system found it, 0 = user-added"},
+          {n:"is_active",t:"INTEGER",badges:[],notes:"Default 1"},
+          {n:"created_at",t:"TEXT",badges:["nn"],notes:""},
+        ]
+      },
+      {
+        name:"planned_expenses",
+        desc:"Future big purchases tracked for forward budgeting",
+        cols:[
+          {n:"id",t:"INTEGER",badges:["pk"],notes:""},
+          {n:"title",t:"TEXT",badges:["nn"],notes:"e.g. 'New laptop'"},
+          {n:"amount",t:"REAL",badges:["nn"],notes:"Estimated cost"},
+          {n:"expected_date",t:"TEXT",badges:[],notes:"Target purchase date"},
+          {n:"category_id",t:"INTEGER",badges:["fk"],notes:"→ categories.id, nullable",ref:"categories.id"},
+          {n:"notes",t:"TEXT",badges:[],notes:""},
+          {n:"is_fulfilled",t:"INTEGER",badges:[],notes:"Default 0"},
+          {n:"linked_txn_id",t:"INTEGER",badges:["fk"],notes:"→ transactions.id once fulfilled",ref:"transactions.id"},
+          {n:"created_at",t:"TEXT",badges:["nn"],notes:""},
+        ]
+      }
+    ]
+  },
+  {
+    group:"Logs",
+    tables:[
+      {
+        name:"system_logs",
+        desc:"Immutable audit log for every action in the system",
+        cols:[
+          {n:"id",t:"INTEGER",badges:["pk"],notes:""},
+          {n:"level",t:"TEXT",badges:["nn"],notes:"'info' | 'warn' | 'error' | 'debug'"},
+          {n:"action_type",t:"TEXT",badges:["nn"],notes:"e.g. LOGIN, PARSE_EMAIL, CREATE_TXN, UPDATE_CATEGORY"},
+          {n:"entity_type",t:"TEXT",badges:[],notes:"e.g. 'transaction', 'merchant', nullable"},
+          {n:"entity_id",t:"INTEGER",badges:[],notes:"FK to the affected row, nullable"},
+          {n:"old_value",t:"TEXT",badges:[],notes:"JSON snapshot before change"},
+          {n:"new_value",t:"TEXT",badges:[],notes:"JSON snapshot after change"},
+          {n:"ip_address",t:"TEXT",badges:[],notes:""},
+          {n:"user_agent",t:"TEXT",badges:[],notes:""},
+          {n:"created_at",t:"TEXT",badges:["nn"],notes:""},
+        ]
+      }
+    ]
+  }
+];
+
+const sidebar = document.getElementById('sidebar');
+const detail  = document.getElementById('detail');
+
+function renderDetail(table) {
+  let html = `<div class="detail-head">
+    <div class="detail-tname">${table.name}</div>
+    <div class="detail-desc">${table.desc}</div>
+  </div>
+  <table class="col-table">
+    <thead><tr>
+      <th style="width:28%">Column</th>
+      <th style="width:14%">Type</th>
+      <th style="width:20%">Constraints</th>
+      <th>Notes</th>
+    </tr></thead><tbody>`;
+
+  table.cols.forEach(col => {
+    const badges = col.badges.map(b => `<span class="badge ${b}">${b.toUpperCase()}</span>`).join('');
+    const ref = col.ref ? `<span class="fk-refs">→ ${col.ref}</span>` : '';
+    html += `<tr>
+      <td><span class="col-name">${col.n}</span></td>
+      <td><span class="col-type">${col.t}</span></td>
+      <td>${badges}</td>
+      <td><span class="col-notes">${col.notes}${ref}</span></td>
+    </tr>`;
+  });
+
+  html += `</tbody></table>`;
+  detail.innerHTML = html;
+}
+
+let activeBtn = null;
+
+schema.forEach(group => {
+  const gh = document.createElement('div');
+  gh.className = 'group-header';
+  gh.textContent = group.group;
+  sidebar.appendChild(gh);
+
+  group.tables.forEach(table => {
+    const btn = document.createElement('button');
+    btn.className = 'tbl-btn';
+    btn.textContent = table.name;
+    btn.addEventListener('click', () => {
+      if (activeBtn) activeBtn.classList.remove('active');
+      btn.classList.add('active');
+      activeBtn = btn;
+      renderDetail(table);
+    });
+    sidebar.appendChild(btn);
+  });
+});
+</script>

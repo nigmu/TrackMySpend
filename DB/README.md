@@ -1,0 +1,1 @@
+To visualize the SCHEMA: https://dbdiagram.io/d/TrackMySpend-69dab2658089629684744c1b
