@@ -1,8 +1,7 @@
 import sqlite3
 from pathlib import Path
 from typing import Generator
-
-DB_PATH = Path("DB/data/trackmyspend.db")
+from ..global_configs import DB_PATH
 
 
 def get_db() -> Generator[sqlite3.Connection, None, None]:

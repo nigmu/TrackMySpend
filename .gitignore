@@ -4,7 +4,7 @@ finance_tracker_build_order.html
 PLAN.md
 gauth.py
 test.py
-
+temp.txt
 *.db
 data/
 

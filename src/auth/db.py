@@ -1,8 +1,7 @@
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
-
-DB_PATH = Path("DB/data/trackmyspend.db")
+from ..global_configs import DB_PATH
 
 
 def get_email_account_by_email(db: sqlite3.Connection, email_address: str) -> sqlite3.Row | None:

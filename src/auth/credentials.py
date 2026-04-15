@@ -6,8 +6,7 @@ from src.security.crypto import decrypt_text
 
 from .config import GMAIL_SCOPES, get_oauth_config
 from .db import get_account_token_row
-
-DB_PATH = Path("DB/data/trackmyspend.db")
+from ..global_configs import DB_PATH
 
 def build_gmail_credentials_for_email(email_address: str, db_path: Path = DB_PATH) -> Credentials:
     """

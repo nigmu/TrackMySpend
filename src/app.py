@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
 from .auth.auth import router as gmail_router
+from .ingestion.ingest import router as ingestion_router
 
 load_dotenv()
 
@@ -25,6 +26,7 @@ app.add_middleware(
 )
 
 app.include_router(gmail_router)
+app.include_router(ingestion_router)
 
 
 @app.get("/")

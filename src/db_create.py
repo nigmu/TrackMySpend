@@ -1,7 +1,6 @@
 import sqlite3
 from pathlib import Path
-
-DB_PATH = Path("DB/data/trackmyspend.db")
+from ..global_configs import DB_PATH
 
 SCHEMA_SQL = """
 PRAGMA foreign_keys = ON;
@@ -28,7 +27,8 @@ CREATE TABLE email_accounts (
     polling_interval_min INTEGER DEFAULT 60,
     last_polled_at TEXT,
     is_active INTEGER DEFAULT 1,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    last_history_id TEXT
 );
 
 -- =========================
@@ -166,6 +166,7 @@ CREATE TABLE transactions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     email_account_id INTEGER NOT NULL,
     bank_account_id INTEGER NOT NULL,
+    gmail_message_id TEXT UNIQUE
     merchant_id INTEGER,
     category_id INTEGER,
     income_source_id INTEGER,

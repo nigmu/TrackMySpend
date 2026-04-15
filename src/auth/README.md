@@ -1,68 +1,141 @@
-# Google Auth Flow (TrackMySpend)
+# Auth Module (Google Gmail OAuth)
 
-This folder contains Gmail OAuth logic split by responsibility:
+This folder implements Gmail OAuth for TrackMySpend with a layered design:
 
-- `auth.py` entry point
-- `routes.py` HTTP layer
-- `service.py` business logic
-- `db.py` SQL/data access
-- `credentials.py` DB-to-Google credentials transformation
-- `config.py` environment-driven OAuth config
+- `auth.py` -> entry point
+- `routes.py` -> HTTP layer
+- `service.py` -> business logic
+- `db.py` -> SQL and persistence
+- `credentials.py` -> DB row to Google `Credentials`
+- `config.py` -> env-based OAuth configuration
+- `src/security/crypto.py` -> shared encryption/decryption utilities
 
-## Files and Responsibilities
+The app mounts this router under `/auth/gmail`.
+
+## Architecture and Responsibilities
 
 - `auth.py`
-  - Entry point for the auth package.
-  - Exposes router used by the app.
+  - Exposes the auth router as the module entry point.
+  - Keeps app integration simple (`app.include_router(...)`).
+
 - `routes.py`
-  - Defines HTTP endpoints only.
-  - Delegates behavior to `service.py`.
+  - Defines endpoint paths, params, and dependency wiring.
+  - Calls service methods; contains no OAuth/SQL logic.
+
 - `service.py`
-  - Handles OAuth flow, PKCE state, callback exchange, and account actions.
+  - Handles OAuth connect/callback flow.
+  - Manages PKCE `state` + `code_verifier` in memory with TTL cleanup.
+  - Performs Google token exchange and user info lookup.
+  - Encrypts token values before persistence.
+  - Implements account state updates (polling interval, active flag, delete).
+
 - `db.py`
-  - Contains SQL queries and DB write operations for auth flows.
+  - Contains all `email_accounts` SQL reads/writes.
+  - No FastAPI or Google SDK logic.
+
 - `credentials.py`
-  - Converts DB token rows into `google.oauth2.credentials.Credentials`.
+  - Reads encrypted tokens from DB.
+  - Decrypts with `security.crypto`.
+  - Builds `google.oauth2.credentials.Credentials` for Gmail API usage.
+
 - `config.py`
-  - Loads OAuth client settings from `.env`.
-  - Defines Gmail scopes.
-- `../security/crypto.py`
-  - Holds generic encryption/decryption helpers.
-  - Reads/creates the encryption key from `.env` (`ENCRYPTION_KEY`).
-  - Used by auth code to secure OAuth tokens in DB.
-- `dependencies.py`
-  - DB connection dependency used by routes.
+  - Loads OAuth config from environment.
+  - Defines Gmail scopes used throughout auth and ingestion.
 
-## End-to-End Auth Process
+- `src/security/crypto.py`
+  - Generic text encryption/decryption.
+  - Reads `ENCRYPTION_KEY` from `.env` (creates one if missing).
 
-1. Client hits `GET /auth/gmail/connect`.
-2. `service.py` builds Google `Flow`, generates PKCE values, and redirects to
-   Google consent screen.
-3. Google calls back to `GET /auth/gmail/callback` with `code` and `state`.
-4. The callback validates/restores PKCE state and exchanges code for tokens.
-5. Access/refresh tokens are encrypted via `security.crypto.encrypt_text(...)`.
-6. Encrypted tokens are saved in `email_accounts` table.
-7. Later, helper code in `credentials.py`:
-   - reads encrypted tokens from DB,
-   - decrypts them with `security.crypto.decrypt_text(...)`,
-   - combines them with `.env` OAuth client config,
-   - returns `google.oauth2.credentials.Credentials`.
+## Detailed OAuth Flow
 
-## Data Sources Used
+1. Client calls `GET /auth/gmail/connect`.
+2. Service creates a Google OAuth `Flow` using values from `config.py`.
+3. Service requests authorization URL with:
+   - `access_type=offline` (refresh token support)
+   - `prompt=consent`
+   - granted scopes from `GMAIL_SCOPES`
+4. Service stores PKCE context in memory:
+   - key: OAuth `state`
+   - value: `(code_verifier, created_at_monotonic)`
+5. User is redirected to Google consent page.
+6. Google redirects back to `GET /auth/gmail/callback?code=...&state=...`.
+7. Service validates `state`, restores `code_verifier`, and exchanges `code` for tokens.
+8. Service calls Google userinfo API to get the account email address.
+9. Service encrypts access/refresh tokens with `encrypt_text(...)`.
+10. Service upserts `email_accounts`:
+    - existing email -> update tokens + mark active
+    - new email -> insert new row
+11. Callback returns JSON status payload.
 
-- `.env` variables (read in `config.py` and `security/crypto.py`):
-  - `GOOGLE_CLIENT_ID`
-  - `GOOGLE_CLIENT_SECRET`
-  - `GOOGLE_REDIRECT_URI`
-  - `ENCRYPTION_KEY` (auto-generated if missing)
-- SQLite DB:
-  - `DB/data/trackmyspend.db`
-  - `email_accounts` table stores encrypted OAuth tokens.
+## Database Contract
 
-## Minimal Requirements Before Auth Works
+Auth currently persists OAuth details in `email_accounts`:
 
-- Google OAuth client configured with redirect URI matching
-  `GOOGLE_REDIRECT_URI`.
-- App authorized on Google consent screen (test users if app is in testing).
-- `email_accounts` table present in DB schema.
-- Valid `.env` values loaded before running the app.
+- `email_address` (unique identity key)
+- `oauth_access_token` (encrypted)
+- `oauth_refresh_token` (encrypted)
+- `polling_interval_min`
+- `last_polled_at`
+- `is_active`
+- `created_at`
+
+No plaintext token is written to DB.
+
+## Environment Variables
+
+Required `.env` keys:
+
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `GOOGLE_REDIRECT_URI`
+- `ENCRYPTION_KEY` (auto-created by `security/crypto.py` if missing)
+
+Notes:
+
+- `GOOGLE_REDIRECT_URI` must exactly match the URI configured in Google Cloud.
+- In local development, app sets insecure transport for OAuth over HTTP localhost.
+
+## Final API Endpoints
+
+Base prefix: `/auth/gmail`
+
+- `GET /connect`
+  - Starts OAuth and redirects to Google.
+  - Response: `307 Temporary Redirect`.
+
+- `GET /callback?code=<code>&state=<state>`
+  - Handles OAuth callback and stores/updates encrypted tokens.
+  - Success response example:
+    - `{"status":"connected","email":"user@gmail.com","message":"..."}`
+    - `{"status":"reconnected","email":"user@gmail.com","message":"..."}`
+  - Common error responses:
+    - invalid/expired state
+    - token exchange failure
+    - user info fetch failure
+
+- `GET /accounts`
+  - Lists connected Gmail accounts.
+  - Returns array of account rows (safe fields only).
+
+- `DELETE /accounts/{account_id}`
+  - Best-effort token revocation at Google.
+  - Deletes account row from DB.
+
+- `PATCH /accounts/{account_id}/polling?interval_min=<int>`
+  - Updates polling interval.
+  - Validation: minimum is 5 minutes.
+
+- `PATCH /accounts/{account_id}/active?is_active=<bool>`
+  - Activates/deactivates account.
+  - `true` -> active, `false` -> inactive.
+
+## How Ingestion Uses Auth Output
+
+Ingestion/poller layer uses `email_accounts` + `credentials.py`:
+
+1. select active accounts (`is_active = 1`)
+2. decrypt stored tokens into Google credentials
+3. fetch messages from Gmail API
+4. update `last_polled_at`
+
+This keeps OAuth concerns inside auth module while letting ingestion reuse credentials safely.
