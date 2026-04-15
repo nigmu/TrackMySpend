@@ -3,6 +3,7 @@ FEATUREold.md
 finance_tracker_build_order.html
 PLAN.md
 gauth.py
+test.py
 
 *.db
 data/
