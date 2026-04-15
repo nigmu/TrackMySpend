@@ -2,7 +2,6 @@ import sqlite3
 from pathlib import Path
 from typing import Generator
 
-# DB_PATH = Path(__file__).resolve().parents[2] / "DB" / "data" / "trackmyspend.db"
 DB_PATH = Path("DB/data/trackmyspend.db")
 
 

@@ -1,11 +1,9 @@
 import base64
 import re
-import sqlite3
 
-from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
-from src.auth.gmail import decrypt_token, get_oauth_config
+from src.auth.credentials import build_gmail_credentials_for_email
 
 
 def _decode_body_data(data_b64: str) -> str:
@@ -60,35 +58,9 @@ def extract_body(payload: dict) -> str:
         return decoded.strip()
     return ""
 
-
-conn = sqlite3.connect("DB/data/trackmyspend.db")
-conn.row_factory = sqlite3.Row
-
-row = conn.execute(
-    """
-    SELECT oauth_access_token, oauth_refresh_token
-    FROM email_accounts
-    WHERE email_address = ?
-    """,
-    ("nigamananda7161@gmail.com",),
-).fetchone()
-
-if not row:
-    raise SystemExit("No email_accounts row for that address.")
-
-access_token = decrypt_token(row["oauth_access_token"])
-refresh_token = decrypt_token(row["oauth_refresh_token"])
-
-oauth = get_oauth_config()["web"]
-
-creds = Credentials(
-    token=access_token,
-    refresh_token=refresh_token,
-    token_uri=oauth["token_uri"],
-    client_id=oauth["client_id"],
-    client_secret=oauth["client_secret"],
-    scopes=["https://www.googleapis.com/auth/gmail.readonly"],
-)
+# nigamananda7161@gmail.com
+# jaaganamrita@gmail.com
+creds = build_gmail_credentials_for_email("jaaganamrita@gmail.com")
 
 service = build("gmail", "v1", credentials=creds)
 
@@ -97,7 +69,7 @@ msgs = res.get("messages", [])
 if not msgs:
     print("No inbox messages found.")
 else:
-    msg = service.users().messages().get(userId="me", id=msgs[2]["id"], format="full").execute()
+    msg = service.users().messages().get(userId="me", id=msgs[0]["id"], format="full").execute()
     headers = {h["name"]: h["value"] for h in msg["payload"].get("headers", [])}
     body_text = extract_body(msg["payload"])
     if not body_text:

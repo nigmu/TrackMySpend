@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-from .auth.router import router as gmail_router
+from .auth.auth import router as gmail_router
 
 load_dotenv()
 

@@ -13,16 +13,6 @@
 // AUTH & USER
 // ─────────────────────────────────────────
 
-Table users {
-  id               integer      [primary key, increment]
-  username         text         [not null, unique]
-  password_hash    text         [not null, note: 'bcrypt hash']
-  pin_hash         text         [note: 'Optional short PIN for quick re-lock']
-  session_timeout_min integer   [default: 30]
-  created_at       text         [not null]
-  last_login_at    text
-}
-
 Table app_settings {
   id          integer  [primary key, increment]
   key         text     [not null, unique, note: 'e.g. log_retention_days, default_currency, llm_model, anomaly_threshold_multiplier']
@@ -38,7 +28,6 @@ Table app_settings {
 
 Table email_accounts {
   id                    integer  [primary key, increment]
-  user_id               integer  [not null]
   email_address         text     [not null, unique]
   oauth_access_token    text     [not null, note: 'Encrypted at rest']
   oauth_refresh_token   text     [not null, note: 'Encrypted at rest']
@@ -50,7 +39,7 @@ Table email_accounts {
 
 Table sms_sources {
   id             integer  [primary key, increment]
-  user_id        integer  [not null]
+  email_account_id        integer  [not null]
   phone_number   text     [not null, unique]
   carrier        text     [note: 'e.g. Airtel, Jio']
   is_active      integer  [default: 1]
@@ -80,7 +69,7 @@ Table parse_jobs {
 
 Table bank_accounts {
   id                     integer  [primary key, increment]
-  user_id                integer  [not null]
+  email_account_id                integer  [not null]
   display_name           text     [not null, note: 'e.g. HDFC Savings, Axis Credit Card']
   account_type           text     [not null, note: 'savings | current | credit_card | wallet']
   bank_name              text
@@ -162,7 +151,7 @@ Table tags {
 
 Table transactions {
   id               integer  [primary key, increment]
-  user_id          integer  [not null]
+  email_account_id          integer  [not null]
   bank_account_id  integer  [not null]
   merchant_id      integer  [note: 'Nullable; resolved by parser or manually']
   category_id      integer  [note: 'Nullable; overrides merchant default_category_id when set']
@@ -373,9 +362,8 @@ Table system_logs {
 // ─────────────────────────────────────────
 
 // Auth
-Ref: email_accounts.user_id > users.id
-Ref: sms_sources.user_id > users.id
-Ref: bank_accounts.user_id > users.id
+Ref: sms_sources.email_account_id > email_accounts.id
+Ref: bank_accounts.email_account_id > email_accounts.id
 
 // Ingestion
 Ref: parse_jobs.email_account_id > email_accounts.id
@@ -392,7 +380,7 @@ Ref: categories.parent_id > categories.id
 Ref: merchants.default_category_id > categories.id
 
 // Transactions
-Ref: transactions.user_id > users.id
+Ref: transactions.email_account_id > email_accounts.id
 Ref: transactions.bank_account_id > bank_accounts.id
 Ref: transactions.merchant_id > merchants.id
 Ref: transactions.category_id > categories.id
