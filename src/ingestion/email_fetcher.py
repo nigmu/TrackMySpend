@@ -1,5 +1,8 @@
 import sqlite3
+import base64
+import re
 from datetime import datetime, timezone
+from html import unescape
 from email.utils import parsedate_to_datetime
 
 from google.oauth2.credentials import Credentials
@@ -53,6 +56,67 @@ def _parse_header_date_to_iso(date_header: str | None) -> str | None:
         return None
 
 
+def _decode_base64url_to_text(data: str | None) -> str | None:
+    if not data:
+        return None
+    try:
+        padded = data + "=" * (-len(data) % 4)
+        raw = base64.urlsafe_b64decode(padded.encode("utf-8"))
+        return raw.decode("utf-8", errors="replace")
+    except Exception:
+        return None
+
+
+def _strip_html_to_text(html: str) -> str:
+    # Remove script/style contents first.
+    html = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", " ", html)
+    # Strip remaining tags.
+    text = re.sub(r"(?is)<[^>]+>", " ", html)
+    text = unescape(text)
+    # Normalize whitespace.
+    text = re.sub(r"\\s+", " ", text).strip()
+    return text
+
+
+def _extract_text_from_payload(payload: dict | None, *, max_chars: int = 50000) -> str:
+    """
+    Extract a human-readable full body:
+    - Prefer `text/plain` parts.
+    - Fallback to `text/html` parts (strip tags).
+    """
+    if not payload:
+        return ""
+
+    mime_type = (payload.get("mimeType") or "").lower()
+    body_data = (payload.get("body") or {}).get("data")
+    if mime_type.startswith("text/plain"):
+        decoded = _decode_base64url_to_text(body_data)
+        if decoded:
+            decoded = re.sub(r"\\s+", " ", decoded).strip()
+            return decoded[:max_chars]
+
+    # Search subparts first (often the real body is nested).
+    for part in payload.get("parts", []) or []:
+        extracted = _extract_text_from_payload(part, max_chars=max_chars)
+        if extracted:
+            return extracted
+
+    # If nothing found in parts, try html body at this level.
+    if mime_type.startswith("text/html"):
+        html = _decode_base64url_to_text(body_data)
+        if html:
+            return _strip_html_to_text(html)[:max_chars]
+
+    # Last resort: if there's body data but no mime type we understand.
+    if body_data:
+        decoded = _decode_base64url_to_text(body_data)
+        if decoded:
+            decoded = re.sub(r"\\s+", " ", decoded).strip()
+            return decoded[:max_chars]
+
+    return ""
+
+
 def fetch_top_n_raw_messages_for_one_account(account_id: int, top_n: int = 10) -> list[dict]:
     """
     Fetch top N raw message payloads (metadata + snippet + payload) for an account.
@@ -98,6 +162,7 @@ def fetch_top_n_raw_messages_for_one_account(account_id: int, top_n: int = 10) -
                     "thread_id": full.get("threadId"),
                     "internal_date": full.get("internalDate"),
                     "snippet": full.get("snippet", ""),
+                    # "full_body_text": _extract_text_from_payload(full.get("payload", {})),
                     "payload": full.get("payload", {}),
                 }
             )
@@ -160,6 +225,7 @@ def fetch_top_n_filtered_messages_for_one_account(account_id: int, top_n: int = 
                     "gmail_received_at_utc": _internal_date_ms_to_iso_utc(internal_date_ms),
                     "date_header_iso": _parse_header_date_to_iso(raw_date),
                     "snippet": full.get("snippet", ""),
+                    # "full_body_text": _extract_text_from_payload(full.get("payload", {})),
                 }
             )
 
@@ -286,6 +352,8 @@ def fetch_latest_filtered_messages_for_one_account(account_id: int) -> tuple[lis
                     "gmail_received_at_utc": _internal_date_ms_to_iso_utc(internal_date_ms),
                     "date_header_iso": _parse_header_date_to_iso(raw_date),
                     "snippet": full.get("snippet", ""),
+                    # "full_body_text": _extract_text_from_payload(full.get("payload", {})),
+                    "payload": full.get("payload", {}),
                 }
             )
 

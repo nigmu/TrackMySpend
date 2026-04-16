@@ -3,12 +3,12 @@ FEATUREold.md
 finance_tracker_build_order.html
 PLAN.md
 gauth.py
-test.py
+# test.py
 temp.txt
 *.db
 data/
-
-
+RAW_JSON.json
+test.json
 
 
 
