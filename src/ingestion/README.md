@@ -1,8 +1,10 @@
 # Ingestion Module (Gmail Fetch + Polling)
 
-This folder is responsible for pulling raw Gmail message data into the TrackMySpend pipeline.
-It is intentionally split into small modules so each layer has one job and can evolve
-independently.
+This folder is responsible for pulling Gmail message data into the TrackMySpend
+pipeline and placing parser-ready rows into the first staging table.
+
+It does not decide parsing rules for stage 2. That responsibility now lives in
+the parsing layer.
 
 ---
 
@@ -12,306 +14,304 @@ At a high level, ingestion:
 
 1. Reads connected Gmail accounts from `email_accounts`.
 2. Builds Google credentials from encrypted DB tokens.
-3. Fetches message data from Gmail API in two modes:
-   - **Top-N fetch** (bootstrap / snapshot style)
-   - **Incremental fetch** (historyId-based delta sync)
-4. Stores latest filtered messages in `ingestion_parser_staging` for parser consumption.
-5. Updates sync markers in DB (`last_polled_at`, `last_history_id`).
-6. Exposes API endpoints for manual fetch and manual polling triggers.
+3. Fetches Gmail messages in two modes:
+   - `top-n` snapshot fetch
+   - incremental `historyId`-based fetch
+4. Stores filtered fetch output in `ingestion_parser_staging`.
+5. Updates mailbox sync markers in `email_accounts`:
+   - `last_polled_at`
+   - `last_history_id`
+6. Exposes ingestion HTTP endpoints for manual fetch and sync.
 
-It does **not** parse transactions or normalize business data. That belongs to later
-parsing/pipeline modules.
+It intentionally does not:
 
----
-
-## File-by-File Architecture
-
-### `ingest.py` (entry point)
-
-- Exposes the ingestion router so `app.py` can mount it.
-- Keeps app wiring simple and consistent with the auth module pattern.
-
-Why this exists:
-- Avoids importing internal route files directly from the app layer.
-- Keeps folder encapsulation clean (`from .ingest import router`).
+- apply parser keyword rules
+- move rows into `parsing_sender_regex_staging`
+- interpret parser statuses beyond writing raw stage-1 input
 
 ---
 
-### `email_fetcher.py` (fetch business logic)
+## Current File Roles
 
-Contains Gmail API fetch logic only.
+### `ingest.py`
 
-Main responsibilities:
+- Exposes the ingestion router for app wiring.
 
-- Build Google `Credentials` from encrypted tokens.
-- Fetch top-N raw messages for an account.
-- Fetch top-N filtered messages for an account.
-- Fetch incremental messages based on `last_history_id`.
+### `email_fetcher.py`
 
-What it intentionally does **not** do:
-- No polling cadence decisions.
-- No automation loops.
-- No schedule checks (`polling_interval_min`).
+- Handles Gmail API access only.
+- Builds credentials from encrypted tokens.
+- Fetches:
+  - top-N raw messages
+  - top-N filtered messages
+  - incremental filtered messages using `last_history_id`
 
-Why this separation:
-- Fetching should be deterministic and reusable from both routes and poller.
-- Scheduler concerns (when to fetch) should not be mixed with API client concerns
-  (how to fetch).
+Important note:
 
----
+- Filtered fetch responses currently keep lightweight fields such as
+  `from`, `to`, `subject`, `date_header`, timestamps, and Gmail `snippet`.
+- Full message payload still exists in raw responses and the staged row keeps the
+  entire message snapshot in `raw_json`.
+- `snippet` is only Gmail preview text and may be truncated.
 
-### `poller.py` (automation + staging + sync markers)
+### `poller.py`
 
-Contains polling mechanics and DB sync marker updates.
-
-Main responsibilities:
-
-- Manual one-shot polling functions (`poll_once_*`) for immediate sync.
-- Incremental single-account poll helper.
-- Automation loop (`run_poller_loop`) with interval gating.
-- Writes fetched filtered messages to `ingestion_parser_staging`.
-- Marker updates:
-  - `last_polled_at`
+- Decides when an account is due for polling.
+- Runs incremental sync for one or all active accounts.
+- Writes fetched filtered rows into `ingestion_parser_staging` by calling
+  `staging_store.store_for_parser(...)`.
+- Updates:
   - `last_history_id`
+  - `last_polled_at`
 
-Why this separation:
-- Polling orchestration is stateful/timing-based.
-- Keeps route handlers thin and fetcher logic reusable.
+### `staging_store.py`
 
----
+- Accepts filtered messages from poller.
+- Inserts them into `ingestion_parser_staging`.
+- Uses idempotent insert semantics with the unique constraint on
+  `(email_account_id, gmail_message_id)`.
+- Supports `keep_existing`:
+  - `True` -> append/dedupe
+  - `False` -> clear stage-1 table before insert
 
-### `staging_store.py` (ingestion staging writer)
+### `routes.py`
 
-Contains write logic for parser staging in ingestion.
-
-Main responsibilities:
-
-- Accept filtered messages returned by poller sync functions.
-- Insert rows into `ingestion_parser_staging` with idempotent semantics.
-- Persist both preview and full body fields:
-  - `snippet`
-  - `full_body` (from `full_message_text`).
-- Support `keep_existing` toggle:
-  - `True` (default): append/dedupe behavior.
-  - `False`: clear table before writing new rows.
-
-Why this separation:
-- Poller decides **when** to fetch.
-- Staging store decides **how** fetched rows are persisted for parser.
+- HTTP wrapper for ingestion fetch/sync functions.
+- Keeps validation and response shaping separate from business logic.
 
 ---
 
-### `routes.py` (HTTP layer)
+## Core Design Decisions
 
-Exposes ingestion endpoints and delegates to fetcher/poller functions.
+## 1) Two fetch models exist on purpose
 
-Current endpoint families:
+### Top-N fetch
 
-- Raw messages - one account - top N
-- Filtered messages - one account - top N
-- Filtered messages - one account - latest
-- Filtered messages - all accounts - latest
+Best for:
 
-Why this separation:
-- HTTP concerns (query validation, response codes) stay in one file.
-- Business logic is tested/reused without FastAPI request objects.
+- bootstrap
+- diagnostics
+- quick inspection of latest mailbox contents
 
----
+Examples:
 
-## Key Design Decisions and Why
+- `GET /ingestion/accounts/{id}/messages/raw/top-n?top_n=10`
+- `GET /ingestion/accounts/{id}/messages/filtered/top-n?top_n=10`
 
-## 1) Two fetch models: Top-N and Incremental
+### Incremental fetch
 
-### Top-N
-- Best for:
-  - bootstrapping
-  - debugging
-  - “show me latest mailbox snapshot now”
-- Endpoint examples:
-  - `GET /ingestion/accounts/{id}/messages/raw/top-n?top_n=10`
-  - `GET /ingestion/accounts/{id}/messages/filtered/top-n?top_n=10`
+Best for:
 
-### Incremental (`historyId`)
-- Best for:
-  - ongoing sync with low API overhead
-  - production-style background ingestion
-- Relies on `email_accounts.last_history_id`.
-- Only fetches changes since last known checkpoint.
+- ongoing sync
+- lower Gmail API cost
+- production-style polling
 
-Why both are required:
-- Top-N alone is simple but wasteful for repeated syncs.
-- Incremental alone is efficient but needs bootstrap and diagnostics support.
+Relies on:
 
----
-
-## 2) Manual polling ignores interval; loop respects interval
-
-This is intentional:
-
-- Manual/API-triggered polling should sync immediately (user intent = “do it now”).
-- Background loop should obey `polling_interval_min` to avoid over-polling.
-
-Outcome:
-- You can force sync anytime.
-- Automation remains controlled and cost-aware.
-
----
-
-## 3) `last_polled_at` and `last_history_id` are separate markers
-
-- `last_polled_at` answers: **when** did we last attempt sync?
-- `last_history_id` answers: **from what mailbox checkpoint** should next incremental fetch start?
+- `email_accounts.last_history_id`
 
 Why both:
-- Scheduling and data checkpointing are different concerns.
-- You need both for correct interval behavior and correct delta fetch behavior.
+
+- top-N is simple but wasteful for repeated runs
+- incremental is efficient but needs bootstrap and debugging support
 
 ---
 
-## 4) Raw endpoint and filtered endpoint both exist
+## 2) Polling and staging are separate concerns
 
-- Raw endpoint returns payload-heavy data for diagnostics/future parser logic.
-- Filtered endpoint returns essential UI/debug fields:
-  - From, Subject, Date, snippet, full message text, normalized timestamps.
+- `poller.py` decides when sync runs.
+- `staging_store.py` decides how fetched rows are persisted.
 
-Why both:
-- Different consumers (debuggers vs lightweight UI) need different payload shapes.
+This keeps:
+
+- fetch timing logic independent
+- insert/dedupe behavior reusable
+- parser stage-1 storage explicit and testable
+
+---
+
+## 3) Ingestion owns only stage 1
+
+The ingestion layer writes to:
+
+- `ingestion_parser_staging`
+
+The parsing layer owns:
+
+- filtering rows from stage 1 into stage 2
+- maintaining keyword rules
+- writing to `parsing_sender_regex_staging`
+
+This is an intentional boundary:
+
+- ingestion fetches and stages raw parser input
+- parsing decides which staged rows are relevant for downstream parsing
 
 ---
 
-## End-to-End Data Flow
+## 4) Stage-1 status drives parser pickup
 
-### A) Manual top-N read
+`ingestion_parser_staging` includes `stage2_status`.
 
-1. API call: `GET /ingestion/accounts/1/messages/filtered/top-n?top_n=5`
-2. Route calls `fetch_top_n_filtered_messages_for_one_account(1, 5)`.
-3. Fetcher:
-   - loads account + encrypted tokens
-   - decrypts and builds credentials
-   - calls Gmail list + message metadata APIs
-4. Returns essential message fields only.
+Current meaning:
 
-No schedule marker updates happen here (read-only fetch behavior).
+- `NULL` -> not yet evaluated by stage-2 parser filter
+- `done` -> row was considered and moved to stage 2
+- `skipped` -> row was considered and rejected by stage-2 filter
+
+The parsing layer reads stage-1 rows using:
+
+- `WHERE stage2_status IS NULL`
+- `ORDER BY id ASC`
+- `LIMIT ?`
+
+To keep that fast, schema includes:
+
+- index on `(stage2_status, id)`
+
+This gives a safe queue-like scan without relying on a fragile
+`last_processed_id` checkpoint.
 
 ---
+
+## End-to-End Flow
+
+### A) Manual filtered top-N read
+
+1. API call:
+   - `GET /ingestion/accounts/1/messages/filtered/top-n?top_n=5`
+2. Route calls:
+   - `fetch_top_n_filtered_messages_for_one_account(1, 5)`
+3. Fetcher returns filtered message dicts.
+4. No staging row is written automatically in this path.
+5. No sync marker is updated.
 
 ### B) Manual incremental sync for one account
 
-1. API call: `GET /ingestion/accounts/1/messages/filtered/latest`
-2. Route calls `sync_latest_filtered_messages_for_one_account(1)`.
+1. API call:
+   - `GET /ingestion/accounts/1/messages/filtered/latest`
+2. Route calls:
+   - `sync_latest_filtered_messages_for_one_account(1)`
 3. Poller:
-   - runs incremental fetch
-   - stages fetched filtered messages to `ingestion_parser_staging`
+   - fetches incremental filtered messages
+   - stores them in `ingestion_parser_staging`
    - updates `last_history_id`
    - updates `last_polled_at`
-4. Returns fetched message list and sync metadata.
+4. Response includes fetched messages plus `staged_for_parser`.
 
----
+### C) Background poll loop
 
-### C) Automated loop sync
-
-1. `run_poller_loop()` wakes up every ~30s.
+1. `run_poller_loop()` wakes every ~30 seconds.
 2. Loads active accounts.
-3. Filters accounts that are due by `polling_interval_min`.
-4. Runs incremental sync for due accounts only.
-5. Logs counts and sleeps again.
+3. Filters accounts due by `polling_interval_min`.
+4. Runs incremental sync for due accounts.
+5. Stages fetched rows and updates sync markers.
+6. Sleeps again.
 
-This keeps automation efficient while still allowing manual immediate sync calls.
+### D) Parser stage-2 handoff
+
+1. Parsing reads from `ingestion_parser_staging`.
+2. It only scans rows with `stage2_status IS NULL`.
+3. If parser keyword rules pass:
+   - row is inserted into `parsing_sender_regex_staging`
+   - source row becomes `stage2_status = 'done'`
+4. If parser keyword rules fail:
+   - source row becomes `stage2_status = 'skipped'`
 
 ---
 
-## API Surface (Current)
+## Stage-1 Table Contract
+
+### `ingestion_parser_staging`
+
+Purpose:
+
+- transient parser-input staging table populated by ingestion
+
+Owner:
+
+- written by ingestion
+- consumed by parsing
+
+Key fields:
+
+- identity:
+  - `email_account_id`
+  - `gmail_message_id`
+- headers/meta:
+  - `from_header`
+  - `to_header`
+  - `subject`
+  - `date_header`
+  - `internal_date_ms`
+  - `gmail_received_at_utc`
+  - `date_header_iso`
+- text:
+  - `snippet`
+- audit/debug:
+  - `fetched_at`
+  - `raw_json`
+- parser handoff state:
+  - `stage2_status`
+
+Rules:
+
+- deduped by unique constraint on `(email_account_id, gmail_message_id)`
+- stage-1 should be treated as parser input, not as final parsed output
+- `raw_json` is the source-of-truth snapshot if parser later needs richer payload
+
+---
+
+## Current API Surface
 
 Base prefix: `/ingestion`
 
 - `GET /accounts/{account_id}/messages/raw/top-n?top_n=10`
-  - Returns top N full/raw messages.
+  - returns top N raw Gmail messages
 
 - `GET /accounts/{account_id}/messages/filtered/top-n?top_n=10`
-  - Returns top N essential message fields.
+  - returns top N filtered messages
 
 - `GET /accounts/{account_id}/messages/filtered/latest`
-  - Runs incremental sync for one account and returns fetched delta messages
-    in filtered/essential format (no raw payload).
-  - Also stages those messages into `ingestion_parser_staging`.
+  - runs incremental sync for one account
+  - stages fetched rows into `ingestion_parser_staging`
 
 - `GET /accounts/messages/filtered/latest`
-  - Runs immediate incremental sync for **all active accounts**.
-  - Returns detailed per-account results with filtered messages
-    (`From`, `Subject`, `Date`, snippet, full message text, normalized timestamps).
-  - Also stages fetched messages into `ingestion_parser_staging`.
+  - runs incremental sync for all active accounts
+  - stages fetched rows into `ingestion_parser_staging`
 
 ---
 
-## Staging Contract (Current)
+## Current Parsing Dependency
 
-### `ingestion_parser_staging`
+The current parsing layer depends on these ingestion decisions:
 
-- Purpose: transient queue-like staging table for parser input.
-- Owner: ingestion layer writes, parsing layer consumes.
-- Key fields:
-  - Message identity: `email_account_id`, `gmail_message_id`
-  - Headers/meta: `from_header`, `to_header`, `subject`, `date_header`
-  - Text content:
-    - `snippet` (Gmail preview, may be truncated)
-    - `full_body` (decoded full message text when available)
-  - Audit: `fetched_at`, `raw_json`
-- Dedupe: unique constraint on (`email_account_id`, `gmail_message_id`).
-- Lifecycle: rows remain until parser deletes after successful processing.
-
-### Parser-owned second staging table
-
-- Sender-regex-based staging happens in parsing layer, not ingestion.
-- Parsing reads from `ingestion_parser_staging`, applies regex rules, and writes to
-  `parsing_sender_regex_staging`.
+- keywords for stage-2 filter live in `src/global_configs.py`
+- stage-2 parser route lives under `/parsing`
+- ingestion does not know or care which keywords pass
+- ingestion only provides stage-1 rows plus status-neutral payload
 
 ---
 
 ## Error and Edge Cases
 
-- Account missing -> 404 or status `not_found`.
-- Account inactive -> empty fetch or explicit inactive status (depending on route).
-- No mailbox messages -> empty list (not an error).
-- First incremental run with no `last_history_id`:
-  - bootstrap-like behavior to establish history checkpoint.
-  - may return zero messages but still set new `last_history_id`.
+- Account missing -> `not_found` / HTTP 404
+- Account inactive -> `inactive` / HTTP 400 or empty fetch depending on path
+- Empty mailbox -> empty list, not an error
+- First incremental run without `last_history_id`:
+  - establishes checkpoint
+  - may return zero messages while still storing new history position
+- Gmail `snippet` may be truncated:
+  - use `raw_json` if downstream parsing later needs fuller message content
 
 ---
 
-## Practical Examples
+## Why This Structure Works
 
-### Example 1: Bootstrap first
-
-1. Connect Gmail account via auth flow.
-2. Call:
-   - `GET /ingestion/accounts/{id}/messages/raw/top-n?top_n=10`
-3. Inspect recent message payloads.
-
-### Example 2: Switch to incremental
-
-1. Call:
-   - `GET /ingestion/accounts/{id}/messages/filtered/latest`
-2. Future calls pull only deltas since stored history id.
-
-### Example 3: Immediate user-triggered sync
-
-If user clicks “Sync now” in UI:
-- call `GET /ingestion/accounts/{id}/messages/filtered/latest`
-- sync runs immediately even if interval has not elapsed.
-
----
-
-## Why This Architecture Scales
-
-- Clear boundaries:
-  - routes: HTTP
-  - fetcher: Gmail API calls
-  - poller: scheduling/state updates
-- Supports both debugging and production automation.
-- Makes future migration easier:
-  - move from in-process loop to job queue/worker
-  - add persistence for fetched raw messages
-  - add retries/backoff per account
-
-This structure is intentionally designed so ingestion can grow without tightly coupling
-API handlers, scheduler logic, and Gmail client operations.
+- Clear ownership:
+  - ingestion fetches and stages
+  - parsing filters and advances rows
+- Supports both manual debugging and automated sync
+- Keeps Gmail fetch logic reusable
+- Keeps stage-1 durable enough for parser retries without overcomplicating ingestion
+- Uses status-based queue scanning plus `(stage2_status, id)` index for scalable stage-2 pickup

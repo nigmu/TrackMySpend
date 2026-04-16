@@ -1,21 +1,51 @@
 import sqlite3
 import re
 from datetime import datetime, timezone
-from typing import Pattern
+from pathlib import Path
 
+from .. import global_configs
 from ..global_configs import DB_PATH
-
-SENDER_REGEX_PATTERNS = [
-    r"(?i)alerts?",
-    r"(?i)no-?reply",
-    r"(?i)bank",
-    r"(?i)statement",
-]
-COMPILED_SENDER_REGEX: list[Pattern[str]] = [re.compile(p) for p in SENDER_REGEX_PATTERNS]
 
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _normalized_keywords() -> list[str]:
+    return [k.strip().lower() for k in global_configs.PARSER_FROM_HEADER_KEYWORDS if k and k.strip()]
+
+
+def get_sender_keywords() -> list[str]:
+    return list(global_configs.PARSER_FROM_HEADER_KEYWORDS)
+
+
+def _persist_sender_keywords_to_global_configs(keywords: list[str]) -> None:
+    config_path = Path(__file__).resolve().parents[1] / "global_configs.py"
+    content = config_path.read_text(encoding="utf-8")
+    replacement = "PARSER_FROM_HEADER_KEYWORDS = [\n" + "".join(
+        f'    "{kw}",\n' for kw in keywords
+    ) + "]"
+    updated = re.sub(
+        r"PARSER_FROM_HEADER_KEYWORDS\s*=\s*\[(?:.|\n)*?\]",
+        replacement,
+        content,
+        count=1,
+    )
+    if updated == content:
+        raise ValueError("Could not persist keywords to global_configs.py.")
+    config_path.write_text(updated, encoding="utf-8")
+
+
+def add_sender_keyword(keyword: str) -> list[str]:
+    candidate = keyword.strip()
+    if not candidate:
+        raise ValueError("Keyword cannot be empty.")
+    lowered = candidate.lower()
+    existing = {k.lower() for k in global_configs.PARSER_FROM_HEADER_KEYWORDS}
+    if lowered not in existing:
+        global_configs.PARSER_FROM_HEADER_KEYWORDS.append(candidate)
+        _persist_sender_keywords_to_global_configs(global_configs.PARSER_FROM_HEADER_KEYWORDS)
+    return list(global_configs.PARSER_FROM_HEADER_KEYWORDS)
 
 
 def stage_sender_regex_matches(limit: int = 200) -> dict:
@@ -23,13 +53,16 @@ def stage_sender_regex_matches(limit: int = 200) -> dict:
     conn.row_factory = sqlite3.Row
     try:
         conn.execute("PRAGMA foreign_keys = ON;")
+        sender_keywords = _normalized_keywords()
         rows = conn.execute(
             """
             SELECT
+                id,
                 email_account_id, email_address, gmail_message_id, thread_id,
                 from_header, to_header, subject, date_header, internal_date_ms,
                 gmail_received_at_utc, date_header_iso, snippet, fetched_at, raw_json
             FROM ingestion_parser_staging
+            WHERE stage2_status IS NULL
             ORDER BY id ASC
             LIMIT ?
             """,
@@ -38,47 +71,67 @@ def stage_sender_regex_matches(limit: int = 200) -> dict:
 
         matched_at = _now_iso()
         inserted = 0
+        skipped_by_sender_keywords = 0
         for row in rows:
-            from_header = row["from_header"] or ""
-            for pattern in COMPILED_SENDER_REGEX:
-                if not pattern.search(from_header):
-                    continue
-                result = conn.execute(
+            from_header = (row["from_header"] or "").lower()
+            matched_keyword = next((kw for kw in sender_keywords if kw in from_header), None)
+            if not matched_keyword:
+                skipped_by_sender_keywords += 1
+                conn.execute(
                     """
-                    INSERT OR IGNORE INTO parsing_sender_regex_staging (
-                        email_account_id, email_address, gmail_message_id, thread_id,
-                        from_header, to_header, subject, date_header, internal_date_ms,
-                        gmail_received_at_utc, date_header_iso, snippet, matched_pattern,
-                        fetched_at, matched_at, raw_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    UPDATE ingestion_parser_staging
+                    SET stage2_status = 'skipped'
+                    WHERE id = ?
                     """,
-                    (
-                        row["email_account_id"],
-                        row["email_address"],
-                        row["gmail_message_id"],
-                        row["thread_id"],
-                        row["from_header"],
-                        row["to_header"],
-                        row["subject"],
-                        row["date_header"],
-                        row["internal_date_ms"],
-                        row["gmail_received_at_utc"],
-                        row["date_header_iso"],
-                        row["snippet"],
-                        pattern.pattern,
-                        row["fetched_at"],
-                        matched_at,
-                        row["raw_json"],
-                    ),
+                    (row["id"],),
                 )
-                if result.rowcount > 0:
-                    inserted += 1
+                continue
+
+            result = conn.execute(
+                """
+                INSERT OR IGNORE INTO parsing_sender_regex_staging (
+                    email_account_id, email_address, gmail_message_id, thread_id,
+                    from_header, to_header, subject, date_header, internal_date_ms,
+                    gmail_received_at_utc, date_header_iso, snippet, matched_pattern,
+                    fetched_at, matched_at, raw_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    row["email_account_id"],
+                    row["email_address"],
+                    row["gmail_message_id"],
+                    row["thread_id"],
+                    row["from_header"],
+                    row["to_header"],
+                    row["subject"],
+                    row["date_header"],
+                    row["internal_date_ms"],
+                    row["gmail_received_at_utc"],
+                    row["date_header_iso"],
+                    row["snippet"],
+                    matched_keyword,
+                    row["fetched_at"],
+                    matched_at,
+                    row["raw_json"],
+                ),
+            )
+            conn.execute(
+                """
+                UPDATE ingestion_parser_staging
+                SET stage2_status = 'done'
+                WHERE id = ?
+                """,
+                (row["id"],),
+            )
+            if result.rowcount > 0:
+                inserted += 1
 
         conn.commit()
         return {
             "rows_scanned": len(rows),
             "rows_inserted": inserted,
-            "patterns": SENDER_REGEX_PATTERNS,
+            "skipped_by_from_header_keywords": skipped_by_sender_keywords,
+            "keywords": sender_keywords,
         }
     finally:
         conn.close()

@@ -22,7 +22,6 @@ def _message_values(message: dict, fetched_at: str) -> tuple:
         message.get("gmail_received_at_utc"),
         message.get("date_header_iso"),
         message.get("snippet"),
-        message.get("full_message_text"),
         fetched_at,
         json.dumps(message, ensure_ascii=True, sort_keys=True),
     )
@@ -36,8 +35,8 @@ def _insert_parser_staging_with_conn(conn: sqlite3.Connection, messages: list[di
             INSERT OR IGNORE INTO ingestion_parser_staging (
                 email_account_id, email_address, gmail_message_id, thread_id,
                 from_header, to_header, subject, date_header, internal_date_ms,
-                gmail_received_at_utc, date_header_iso, snippet, full_body, fetched_at, raw_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                gmail_received_at_utc, date_header_iso, snippet, fetched_at, raw_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             _message_values(message, fetched_at),
         )

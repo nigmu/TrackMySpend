@@ -48,15 +48,18 @@ CREATE TABLE ingestion_parser_staging (
     gmail_received_at_utc TEXT,
     date_header_iso TEXT,
     snippet TEXT,
-    full_body TEXT,
     fetched_at TEXT NOT NULL,
     raw_json TEXT,
+    stage2_status TEXT,
     FOREIGN KEY (email_account_id) REFERENCES email_accounts(id),
     UNIQUE(email_account_id, gmail_message_id)
 );
 
 CREATE INDEX idx_ingestion_parser_staging_account
 ON ingestion_parser_staging(email_account_id, fetched_at);
+
+CREATE INDEX idx_ingestion_stage2_status_id
+ON ingestion_parser_staging(stage2_status, id);
 
 CREATE TABLE parsing_sender_regex_staging (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -76,6 +79,7 @@ CREATE TABLE parsing_sender_regex_staging (
     fetched_at TEXT NOT NULL,
     matched_at TEXT NOT NULL,
     raw_json TEXT,
+    parse_status TEXT,
     FOREIGN KEY (email_account_id) REFERENCES email_accounts(id),
     UNIQUE(email_account_id, gmail_message_id, matched_pattern)
 );

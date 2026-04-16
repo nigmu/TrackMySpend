@@ -52,13 +52,14 @@ Table ingestion_parser_staging {
   gmail_received_at_utc text
   date_header_iso      text
   snippet              text
-  full_body            text
   fetched_at           text     [not null]
   raw_json             text
+  stage2_status        text
 
   indexes {
     (email_account_id, gmail_message_id) [unique]
     (email_account_id, fetched_at)
+    (stage2_status, id)
   }
 }
 
@@ -80,6 +81,7 @@ Table parsing_sender_regex_staging {
   fetched_at           text     [not null]
   matched_at           text     [not null]
   raw_json             text
+  parse_status         text
 
   indexes {
     (email_account_id, gmail_message_id, matched_pattern) [unique]

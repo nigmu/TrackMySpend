@@ -1,5 +1,4 @@
 import sqlite3
-import base64
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 
@@ -54,36 +53,6 @@ def _parse_header_date_to_iso(date_header: str | None) -> str | None:
         return None
 
 
-def _decode_base64url(data: str | None) -> str | None:
-    if not data:
-        return None
-    try:
-        padded = data + "=" * (-len(data) % 4)
-        decoded = base64.urlsafe_b64decode(padded.encode("utf-8"))
-        return decoded.decode("utf-8", errors="replace")
-    except Exception:
-        return None
-
-
-def _extract_text_plain(payload: dict | None) -> str | None:
-    if not payload:
-        return None
-
-    mime_type = payload.get("mimeType", "")
-    body_data = (payload.get("body") or {}).get("data")
-
-    if mime_type == "text/plain":
-        return _decode_base64url(body_data)
-
-    for part in payload.get("parts", []) or []:
-        text = _extract_text_plain(part)
-        if text:
-            return text
-
-    # Fallback for simple messages where body is directly present.
-    return _decode_base64url(body_data)
-
-
 def fetch_top_n_raw_messages_for_one_account(account_id: int, top_n: int = 10) -> list[dict]:
     """
     Fetch top N raw message payloads (metadata + snippet + payload) for an account.
@@ -129,7 +98,6 @@ def fetch_top_n_raw_messages_for_one_account(account_id: int, top_n: int = 10) -
                     "thread_id": full.get("threadId"),
                     "internal_date": full.get("internalDate"),
                     "snippet": full.get("snippet", ""),
-                    "full_message_text": _extract_text_plain(full.get("payload", {})) or "",
                     "payload": full.get("payload", {}),
                 }
             )
@@ -192,7 +160,6 @@ def fetch_top_n_filtered_messages_for_one_account(account_id: int, top_n: int = 
                     "gmail_received_at_utc": _internal_date_ms_to_iso_utc(internal_date_ms),
                     "date_header_iso": _parse_header_date_to_iso(raw_date),
                     "snippet": full.get("snippet", ""),
-                    "full_message_text": _extract_text_plain(full.get("payload", {})) or "",
                 }
             )
 
@@ -319,7 +286,6 @@ def fetch_latest_filtered_messages_for_one_account(account_id: int) -> tuple[lis
                     "gmail_received_at_utc": _internal_date_ms_to_iso_utc(internal_date_ms),
                     "date_header_iso": _parse_header_date_to_iso(raw_date),
                     "snippet": full.get("snippet", ""),
-                    "full_message_text": _extract_text_plain(full.get("payload", {})) or "",
                 }
             )
 
