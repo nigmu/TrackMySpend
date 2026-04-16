@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from src.ingestion.email_fetcher import (
     fetch_latest_filtered_messages_for_one_account,
 )
+from src.ingestion.staging_store import store_for_parser
 from ..global_configs import DB_PATH
 
 
@@ -47,7 +48,7 @@ def _load_active_accounts(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     ).fetchall()
 
 
-def sync_latest_filtered_messages_for_one_account(account_id: int) -> dict:
+def sync_latest_filtered_messages_for_one_account(account_id: int, keep_existing_staging: bool = True) -> dict:
     """
     Run one incremental historyId-based sync for a single account and
     persist sync markers.
@@ -69,6 +70,7 @@ def sync_latest_filtered_messages_for_one_account(account_id: int) -> dict:
             return {"account_id": account_id, "messages": [], "new_history_id": None, "status": "inactive"}
 
         messages, new_history_id = fetch_latest_filtered_messages_for_one_account(account_id)
+        staged_for_parser = store_for_parser(messages, keep_existing=keep_existing_staging)
         _update_history_id(conn, account_id, new_history_id)
         _mark_account_polled(conn, account_id)
         return {
@@ -76,6 +78,7 @@ def sync_latest_filtered_messages_for_one_account(account_id: int) -> dict:
             "email_address": row["email_address"],
             "messages": messages,
             "count": len(messages),
+            "staged_for_parser": staged_for_parser,
             "new_history_id": new_history_id,
             "status": "ok",
         }
@@ -83,7 +86,7 @@ def sync_latest_filtered_messages_for_one_account(account_id: int) -> dict:
         conn.close()
 
 
-def sync_latest_filtered_messages_for_all_accounts() -> dict:
+def sync_latest_filtered_messages_for_all_accounts(keep_existing_staging: bool = True) -> dict:
     """
     Run one incremental sync for every active account and return detailed per-account results.
     """
@@ -97,7 +100,10 @@ def sync_latest_filtered_messages_for_all_accounts() -> dict:
     results = []
     total_messages = 0
     for row in rows:
-        result = sync_latest_filtered_messages_for_one_account(account_id=row["id"])
+        result = sync_latest_filtered_messages_for_one_account(
+            account_id=row["id"],
+            keep_existing_staging=keep_existing_staging,
+        )
         results.append(result)
         if result.get("status") == "ok":
             total_messages += int(result.get("count", 0))

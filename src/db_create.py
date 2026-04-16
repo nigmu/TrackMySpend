@@ -32,6 +32,58 @@ CREATE TABLE email_accounts (
 );
 
 -- =========================
+-- INGESTION STAGING
+-- =========================
+CREATE TABLE ingestion_parser_staging (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email_account_id INTEGER NOT NULL,
+    email_address TEXT NOT NULL,
+    gmail_message_id TEXT NOT NULL,
+    thread_id TEXT,
+    from_header TEXT,
+    to_header TEXT,
+    subject TEXT,
+    date_header TEXT,
+    internal_date_ms TEXT,
+    gmail_received_at_utc TEXT,
+    date_header_iso TEXT,
+    snippet TEXT,
+    full_body TEXT,
+    fetched_at TEXT NOT NULL,
+    raw_json TEXT,
+    FOREIGN KEY (email_account_id) REFERENCES email_accounts(id),
+    UNIQUE(email_account_id, gmail_message_id)
+);
+
+CREATE INDEX idx_ingestion_parser_staging_account
+ON ingestion_parser_staging(email_account_id, fetched_at);
+
+CREATE TABLE parsing_sender_regex_staging (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email_account_id INTEGER NOT NULL,
+    email_address TEXT NOT NULL,
+    gmail_message_id TEXT NOT NULL,
+    thread_id TEXT,
+    from_header TEXT,
+    to_header TEXT,
+    subject TEXT,
+    date_header TEXT,
+    internal_date_ms TEXT,
+    gmail_received_at_utc TEXT,
+    date_header_iso TEXT,
+    snippet TEXT,
+    matched_pattern TEXT NOT NULL,
+    fetched_at TEXT NOT NULL,
+    matched_at TEXT NOT NULL,
+    raw_json TEXT,
+    FOREIGN KEY (email_account_id) REFERENCES email_accounts(id),
+    UNIQUE(email_account_id, gmail_message_id, matched_pattern)
+);
+
+CREATE INDEX idx_parsing_sender_regex_staging_account
+ON parsing_sender_regex_staging(email_account_id, matched_at);
+
+-- =========================
 -- SMS SOURCES
 -- =========================
 CREATE TABLE sms_sources (

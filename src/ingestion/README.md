@@ -15,8 +15,9 @@ At a high level, ingestion:
 3. Fetches message data from Gmail API in two modes:
    - **Top-N fetch** (bootstrap / snapshot style)
    - **Incremental fetch** (historyId-based delta sync)
-4. Updates sync markers in DB (`last_polled_at`, `last_history_id`).
-5. Exposes API endpoints for manual fetch and manual polling triggers.
+4. Stores latest filtered messages in `ingestion_parser_staging` for parser consumption.
+5. Updates sync markers in DB (`last_polled_at`, `last_history_id`).
+6. Exposes API endpoints for manual fetch and manual polling triggers.
 
 It does **not** parse transactions or normalize business data. That belongs to later
 parsing/pipeline modules.
@@ -59,7 +60,7 @@ Why this separation:
 
 ---
 
-### `poller.py` (automation + sync markers)
+### `poller.py` (automation + staging + sync markers)
 
 Contains polling mechanics and DB sync marker updates.
 
@@ -68,6 +69,7 @@ Main responsibilities:
 - Manual one-shot polling functions (`poll_once_*`) for immediate sync.
 - Incremental single-account poll helper.
 - Automation loop (`run_poller_loop`) with interval gating.
+- Writes fetched filtered messages to `ingestion_parser_staging`.
 - Marker updates:
   - `last_polled_at`
   - `last_history_id`
@@ -75,6 +77,27 @@ Main responsibilities:
 Why this separation:
 - Polling orchestration is stateful/timing-based.
 - Keeps route handlers thin and fetcher logic reusable.
+
+---
+
+### `staging_store.py` (ingestion staging writer)
+
+Contains write logic for parser staging in ingestion.
+
+Main responsibilities:
+
+- Accept filtered messages returned by poller sync functions.
+- Insert rows into `ingestion_parser_staging` with idempotent semantics.
+- Persist both preview and full body fields:
+  - `snippet`
+  - `full_body` (from `full_message_text`).
+- Support `keep_existing` toggle:
+  - `True` (default): append/dedupe behavior.
+  - `False`: clear table before writing new rows.
+
+Why this separation:
+- Poller decides **when** to fetch.
+- Staging store decides **how** fetched rows are persisted for parser.
 
 ---
 
@@ -149,7 +172,7 @@ Why both:
 
 - Raw endpoint returns payload-heavy data for diagnostics/future parser logic.
 - Filtered endpoint returns essential UI/debug fields:
-  - From, Subject, Date, snippet, normalized timestamps.
+  - From, Subject, Date, snippet, full message text, normalized timestamps.
 
 Why both:
 - Different consumers (debuggers vs lightweight UI) need different payload shapes.
@@ -178,6 +201,7 @@ No schedule marker updates happen here (read-only fetch behavior).
 2. Route calls `sync_latest_filtered_messages_for_one_account(1)`.
 3. Poller:
    - runs incremental fetch
+   - stages fetched filtered messages to `ingestion_parser_staging`
    - updates `last_history_id`
    - updates `last_polled_at`
 4. Returns fetched message list and sync metadata.
@@ -209,11 +233,37 @@ Base prefix: `/ingestion`
 - `GET /accounts/{account_id}/messages/filtered/latest`
   - Runs incremental sync for one account and returns fetched delta messages
     in filtered/essential format (no raw payload).
+  - Also stages those messages into `ingestion_parser_staging`.
 
 - `GET /accounts/messages/filtered/latest`
   - Runs immediate incremental sync for **all active accounts**.
   - Returns detailed per-account results with filtered messages
-    (`From`, `Subject`, `Date`, snippet, normalized timestamps).
+    (`From`, `Subject`, `Date`, snippet, full message text, normalized timestamps).
+  - Also stages fetched messages into `ingestion_parser_staging`.
+
+---
+
+## Staging Contract (Current)
+
+### `ingestion_parser_staging`
+
+- Purpose: transient queue-like staging table for parser input.
+- Owner: ingestion layer writes, parsing layer consumes.
+- Key fields:
+  - Message identity: `email_account_id`, `gmail_message_id`
+  - Headers/meta: `from_header`, `to_header`, `subject`, `date_header`
+  - Text content:
+    - `snippet` (Gmail preview, may be truncated)
+    - `full_body` (decoded full message text when available)
+  - Audit: `fetched_at`, `raw_json`
+- Dedupe: unique constraint on (`email_account_id`, `gmail_message_id`).
+- Lifecycle: rows remain until parser deletes after successful processing.
+
+### Parser-owned second staging table
+
+- Sender-regex-based staging happens in parsing layer, not ingestion.
+- Parsing reads from `ingestion_parser_staging`, applies regex rules, and writes to
+  `parsing_sender_regex_staging`.
 
 ---
 

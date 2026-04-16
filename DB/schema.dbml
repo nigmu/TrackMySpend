@@ -35,6 +35,56 @@ Table email_accounts {
   last_polled_at        text
   is_active             integer  [default: 1]
   created_at            text     [not null]
+  last_history_id       text
+}
+
+Table ingestion_parser_staging {
+  id                   integer  [primary key, increment]
+  email_account_id     integer  [not null]
+  email_address        text     [not null]
+  gmail_message_id     text     [not null]
+  thread_id            text
+  from_header          text
+  to_header            text
+  subject              text
+  date_header          text
+  internal_date_ms     text
+  gmail_received_at_utc text
+  date_header_iso      text
+  snippet              text
+  full_body            text
+  fetched_at           text     [not null]
+  raw_json             text
+
+  indexes {
+    (email_account_id, gmail_message_id) [unique]
+    (email_account_id, fetched_at)
+  }
+}
+
+Table parsing_sender_regex_staging {
+  id                   integer  [primary key, increment]
+  email_account_id     integer  [not null]
+  email_address        text     [not null]
+  gmail_message_id     text     [not null]
+  thread_id            text
+  from_header          text
+  to_header            text
+  subject              text
+  date_header          text
+  internal_date_ms     text
+  gmail_received_at_utc text
+  date_header_iso      text
+  snippet              text
+  matched_pattern      text     [not null]
+  fetched_at           text     [not null]
+  matched_at           text     [not null]
+  raw_json             text
+
+  indexes {
+    (email_account_id, gmail_message_id, matched_pattern) [unique]
+    (email_account_id, matched_at)
+  }
 }
 
 Table sms_sources {
@@ -368,6 +418,8 @@ Ref: bank_accounts.email_account_id > email_accounts.id
 // Ingestion
 Ref: parse_jobs.email_account_id > email_accounts.id
 Ref: parse_jobs.sms_source_id > sms_sources.id
+Ref: ingestion_parser_staging.email_account_id > email_accounts.id
+Ref: parsing_sender_regex_staging.email_account_id > email_accounts.id
 
 // Banking
 Ref: balance_snapshots.bank_account_id > bank_accounts.id
