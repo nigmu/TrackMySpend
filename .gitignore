@@ -4,11 +4,20 @@ finance_tracker_build_order.html
 PLAN.md
 gauth.py
 # test.py
+test2.json
 temp.txt
 *.db
 data/
 RAW_JSON.json
 test.json
+llm_parsed_transactions.json
+llm_transaction_parser.py
+rule_parsed_transactions.json
+rule_transaction_parser.py
+rule_transaction_parser_2.py
+STRUCTURED_EMAIL.json
+parser_test.py
+
 
 
 
