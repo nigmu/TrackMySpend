@@ -1,19 +1,17 @@
-from pathlib import Path
-
 from google.oauth2.credentials import Credentials
 
 from src.security.crypto import decrypt_text
 
 from .config import GMAIL_SCOPES, get_oauth_config
 from .db import get_account_token_row
-from ..global_configs import DB_PATH
 
-def build_gmail_credentials_for_email(email_address: str, db_path: Path = DB_PATH) -> Credentials:
+
+def build_gmail_credentials_for_email(email_address: str) -> Credentials:
     """
     Build google.oauth2.credentials.Credentials from DB-stored encrypted tokens
     and OAuth client values loaded from .env.
     """
-    row = get_account_token_row(email_address=email_address, db_path=db_path)
+    row = get_account_token_row(email_address=email_address)
     access_token = decrypt_text(row["oauth_access_token"])
     refresh_token = decrypt_text(row["oauth_refresh_token"])
     oauth = get_oauth_config()["web"]

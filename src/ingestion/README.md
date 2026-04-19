@@ -17,7 +17,7 @@ At a high level, ingestion:
 3. Fetches Gmail messages in two modes:
    - `top-n` snapshot fetch
    - incremental `historyId`-based fetch
-4. Stores filtered fetch output in `ingestion_parser_staging`.
+4. Stores filtered fetch output in `email_ingest_staging`.
 5. Updates mailbox sync markers in `email_accounts`:
    - `last_polled_at`
    - `last_history_id`
@@ -26,7 +26,7 @@ At a high level, ingestion:
 It intentionally does not:
 
 - apply parser keyword rules
-- move rows into `parsing_sender_regex_staging`
+- move rows into `email_parse_queue_staging`
 - interpret parser statuses beyond writing raw stage-1 input
 
 ---
@@ -58,7 +58,7 @@ Important note:
 
 - Decides when an account is due for polling.
 - Runs incremental sync for one or all active accounts.
-- Writes fetched filtered rows into `ingestion_parser_staging` by calling
+- Writes fetched filtered rows into `email_ingest_staging` by calling
   `staging_store.store_for_parser(...)`.
 - Updates:
   - `last_history_id`
@@ -67,7 +67,7 @@ Important note:
 ### `staging_store.py`
 
 - Accepts filtered messages from poller.
-- Inserts them into `ingestion_parser_staging`.
+- Inserts them into `email_ingest_staging`.
 - Uses idempotent insert semantics with the unique constraint on
   `(email_account_id, gmail_message_id)`.
 - Supports `keep_existing`:
@@ -134,13 +134,13 @@ This keeps:
 
 The ingestion layer writes to:
 
-- `ingestion_parser_staging`
+- `email_ingest_staging`
 
 The parsing layer owns:
 
 - filtering rows from stage 1 into stage 2
 - maintaining keyword rules
-- writing to `parsing_sender_regex_staging`
+- writing to `email_parse_queue_staging`
 
 This is an intentional boundary:
 
@@ -151,7 +151,7 @@ This is an intentional boundary:
 
 ## 4) Stage-1 status drives parser pickup
 
-`ingestion_parser_staging` includes `stage2_status`.
+`email_ingest_staging` includes `stage2_status`.
 
 Current meaning:
 
@@ -194,7 +194,7 @@ This gives a safe queue-like scan without relying on a fragile
    - `sync_latest_filtered_messages_for_one_account(1)`
 3. Poller:
    - fetches incremental filtered messages
-   - stores them in `ingestion_parser_staging`
+   - stores them in `email_ingest_staging`
    - updates `last_history_id`
    - updates `last_polled_at`
 4. Response includes fetched messages plus `staged_for_parser`.
@@ -210,10 +210,10 @@ This gives a safe queue-like scan without relying on a fragile
 
 ### D) Parser stage-2 handoff
 
-1. Parsing reads from `ingestion_parser_staging`.
+1. Parsing reads from `email_ingest_staging`.
 2. It only scans rows with `stage2_status IS NULL`.
 3. If parser keyword rules pass:
-   - row is inserted into `parsing_sender_regex_staging`
+   - row is inserted into `email_parse_queue_staging`
    - source row becomes `stage2_status = 'done'`
 4. If parser keyword rules fail:
    - source row becomes `stage2_status = 'skipped'`
@@ -222,7 +222,7 @@ This gives a safe queue-like scan without relying on a fragile
 
 ## Stage-1 Table Contract
 
-### `ingestion_parser_staging`
+### `email_ingest_staging`
 
 Purpose:
 
@@ -274,11 +274,11 @@ Base prefix: `/ingestion`
 
 - `GET /accounts/{account_id}/messages/filtered/latest`
   - runs incremental sync for one account
-  - stages fetched rows into `ingestion_parser_staging`
+  - stages fetched rows into `email_ingest_staging`
 
 - `GET /accounts/messages/filtered/latest`
   - runs incremental sync for all active accounts
-  - stages fetched rows into `ingestion_parser_staging`
+  - stages fetched rows into `email_ingest_staging`
 
 ---
 

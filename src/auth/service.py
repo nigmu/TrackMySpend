@@ -1,12 +1,14 @@
-import sqlite3
 from datetime import datetime, timezone
 from time import monotonic
+
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse, RedirectResponse
+from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
-from google.oauth2.credentials import Credentials
+from psycopg import Connection
 from src.security.crypto import decrypt_text, encrypt_text
+
 from .config import GMAIL_SCOPES, get_oauth_config
 from .db import (
     delete_email_account_by_id,
@@ -14,9 +16,9 @@ from .db import (
     get_email_account_by_id,
     insert_email_account,
     list_email_accounts,
+    update_email_account_active_status,
     update_email_account_polling_interval,
     update_email_account_tokens,
-    update_email_account_active_status,
 )
 
 _oauth_pkce_store: dict[str, tuple[str, float]] = {}
@@ -58,7 +60,7 @@ def connect_gmail_service() -> RedirectResponse:
     return RedirectResponse(auth_url)
 
 
-def callback_service(code: str, state: str, db: sqlite3.Connection) -> JSONResponse:
+def callback_service(code: str, state: str, db: Connection) -> JSONResponse:
     _cleanup_stale_oauth_state()
     state_entry = _oauth_pkce_store.pop(state, None)
     if not state_entry:
@@ -114,12 +116,12 @@ def callback_service(code: str, state: str, db: sqlite3.Connection) -> JSONRespo
     )
 
 
-def list_accounts_service(db: sqlite3.Connection) -> list[dict]:
+def list_accounts_service(db: Connection) -> list[dict]:
     rows = list_email_accounts(db)
     return [dict(row) for row in rows]
 
 
-def remove_account_service(account_id: int, db: sqlite3.Connection) -> JSONResponse:
+def remove_account_service(account_id: int, db: Connection) -> JSONResponse:
     row = get_email_account_by_id(db, account_id)
     if not row:
         raise HTTPException(status_code=404, detail="Account not found.")
@@ -148,7 +150,7 @@ def remove_account_service(account_id: int, db: sqlite3.Connection) -> JSONRespo
     )
 
 
-def update_polling_service(account_id: int, interval_min: int, db: sqlite3.Connection) -> JSONResponse:
+def update_polling_service(account_id: int, interval_min: int, db: Connection) -> JSONResponse:
     if interval_min < 5:
         raise HTTPException(status_code=400, detail="Polling interval must be at least 5 minutes.")
 
@@ -161,12 +163,12 @@ def update_polling_service(account_id: int, interval_min: int, db: sqlite3.Conne
     return JSONResponse({"status": "updated", "polling_interval_min": interval_min})
 
 
-def update_active_service(account_id: int, is_active: bool, db: sqlite3.Connection) -> JSONResponse:
+def update_active_service(account_id: int, is_active: bool, db: Connection) -> JSONResponse:
     row = get_email_account_by_id(db, account_id)
     if not row:
         raise HTTPException(status_code=404, detail="Account not found.")
 
-    update_email_account_active_status(db, account_id, 1 if is_active else 0)
+    update_email_account_active_status(db, account_id, is_active)
     db.commit()
 
     return JSONResponse(

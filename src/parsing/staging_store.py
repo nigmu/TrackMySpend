@@ -1,10 +1,9 @@
-import sqlite3
 import re
 from datetime import datetime, timezone
 from pathlib import Path
 
 from .. import global_configs
-from ..global_configs import DB_PATH
+from ..db_connection import connect
 
 
 def _now_iso() -> str:
@@ -49,10 +48,8 @@ def add_sender_keyword(keyword: str) -> list[str]:
 
 
 def stage_sender_regex_matches(limit: int = 200) -> dict:
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = connect()
     try:
-        conn.execute("PRAGMA foreign_keys = ON;")
         sender_keywords = _normalized_keywords()
         rows = conn.execute(
             """
@@ -61,10 +58,10 @@ def stage_sender_regex_matches(limit: int = 200) -> dict:
                 email_account_id, email_address, gmail_message_id, thread_id,
                 from_header, to_header, subject, date_header, internal_date_ms,
                 gmail_received_at_utc, date_header_iso, snippet, fetched_at, raw_json
-            FROM ingestion_parser_staging
+            FROM email_ingest_staging
             WHERE stage2_status IS NULL
             ORDER BY id ASC
-            LIMIT ?
+            LIMIT %s
             """,
             (limit,),
         ).fetchall()
@@ -79,9 +76,9 @@ def stage_sender_regex_matches(limit: int = 200) -> dict:
                 skipped_by_sender_keywords += 1
                 conn.execute(
                     """
-                    UPDATE ingestion_parser_staging
+                    UPDATE email_ingest_staging
                     SET stage2_status = 'skipped'
-                    WHERE id = ?
+                    WHERE id = %s
                     """,
                     (row["id"],),
                 )
@@ -89,14 +86,16 @@ def stage_sender_regex_matches(limit: int = 200) -> dict:
 
             result = conn.execute(
                 """
-                INSERT OR IGNORE INTO parsing_sender_regex_staging (
-                    email_account_id, email_address, gmail_message_id, thread_id,
+                INSERT INTO email_parse_queue_staging (
+                    stg1_id, email_account_id, email_address, gmail_message_id, thread_id,
                     from_header, to_header, subject, date_header, internal_date_ms,
                     gmail_received_at_utc, date_header_iso, snippet, matched_pattern,
                     fetched_at, matched_at, raw_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (email_account_id, gmail_message_id) DO NOTHING
                 """,
                 (
+                    row["id"],
                     row["email_account_id"],
                     row["email_address"],
                     row["gmail_message_id"],
@@ -117,13 +116,13 @@ def stage_sender_regex_matches(limit: int = 200) -> dict:
             )
             conn.execute(
                 """
-                UPDATE ingestion_parser_staging
+                UPDATE email_ingest_staging
                 SET stage2_status = 'done'
-                WHERE id = ?
+                WHERE id = %s
                 """,
                 (row["id"],),
             )
-            if result.rowcount > 0:
+            if result.rowcount and result.rowcount > 0:
                 inserted += 1
 
         conn.commit()

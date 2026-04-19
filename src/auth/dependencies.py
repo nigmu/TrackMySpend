@@ -1,17 +1,15 @@
-import sqlite3
-from pathlib import Path
-from typing import Generator
-from ..global_configs import DB_PATH
+from collections.abc import Generator
+
+from psycopg import Connection
+
+from ..db_connection import connect
 
 
-def get_db() -> Generator[sqlite3.Connection, None, None]:
+def get_db() -> Generator[Connection, None, None]:
     """
-    FastAPI dependency — yields a SQLite connection with FK enforcement on,
-    and row_factory set so rows behave like dicts.
+    FastAPI dependency — yields a PostgreSQL connection with dict-like rows.
     """
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON;")
+    conn = connect()
     try:
         yield conn
     finally:

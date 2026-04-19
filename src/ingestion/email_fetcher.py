@@ -1,4 +1,3 @@
-import sqlite3
 import base64
 import re
 from datetime import datetime, timezone
@@ -12,7 +11,7 @@ from googleapiclient.errors import HttpError
 from src.auth.config import GMAIL_SCOPES, get_oauth_config
 from src.security.crypto import decrypt_text
 
-from ..global_configs import DB_PATH
+from ..db_connection import connect
 
 def _build_creds(access_token_enc: str, refresh_token_enc: str) -> Credentials:
     oauth = get_oauth_config()["web"]
@@ -122,20 +121,19 @@ def fetch_top_n_raw_messages_for_one_account(account_id: int, top_n: int = 10) -
     Fetch top N raw message payloads (metadata + snippet + payload) for an account.
     This function only fetches data; it does not update polling metadata in DB.
     """
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = connect()
     try:
         row = conn.execute(
             """
             SELECT id, email_address, oauth_access_token, oauth_refresh_token, is_active
             FROM email_accounts
-            WHERE id = ?
+            WHERE id = %s
             """,
             (account_id,),
         ).fetchone()
         if not row:
             return []
-        if int(row["is_active"]) != 1:
+        if not row["is_active"]:
             return []
 
         creds = _build_creds(row["oauth_access_token"], row["oauth_refresh_token"])
@@ -177,18 +175,17 @@ def fetch_top_n_filtered_messages_for_one_account(account_id: int, top_n: int = 
     Fetch top N messages with essential fields only.
     Includes From, Subject, Date, snippet, internal date, and parsed timestamps.
     """
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = connect()
     try:
         row = conn.execute(
             """
             SELECT id, email_address, oauth_access_token, oauth_refresh_token, is_active
             FROM email_accounts
-            WHERE id = ?
+            WHERE id = %s
             """,
             (account_id,),
         ).fetchone()
-        if not row or int(row["is_active"]) != 1:
+        if not row or not row["is_active"]:
             return []
 
         creds = _build_creds(row["oauth_access_token"], row["oauth_refresh_token"])
@@ -239,14 +236,13 @@ def fetch_top_n_filtered_messages_for_all_accounts(top_n: int = 10) -> list[dict
     Fetch top N filtered messages for every active account.
     Returns one grouped result entry per account.
     """
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = connect()
     try:
         rows = conn.execute(
             """
             SELECT id, email_address
             FROM email_accounts
-            WHERE is_active = 1
+            WHERE is_active = TRUE
             ORDER BY id ASC
             """
         ).fetchall()
@@ -268,20 +264,19 @@ def fetch_top_n_filtered_messages_for_all_accounts(top_n: int = 10) -> list[dict
 
 
 def fetch_latest_filtered_messages_for_one_account(account_id: int) -> tuple[list[dict], str | None]:
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = connect()
     try:
         row = conn.execute(
             """
             SELECT id, email_address, oauth_access_token, oauth_refresh_token,
                    is_active, last_history_id
             FROM email_accounts
-            WHERE id = ?
+            WHERE id = %s
             """,
             (account_id,),
         ).fetchone()
 
-        if not row or int(row["is_active"]) != 1:
+        if not row or not row["is_active"]:
             return [], None
 
         creds = _build_creds(row["oauth_access_token"], row["oauth_refresh_token"])

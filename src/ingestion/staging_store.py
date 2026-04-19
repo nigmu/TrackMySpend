@@ -1,8 +1,10 @@
 import json
-import sqlite3
 from datetime import datetime, timezone
 
-from ..global_configs import DB_PATH
+from psycopg import Connection
+
+from ..db_connection import connect
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -27,20 +29,21 @@ def _message_values(message: dict, fetched_at: str) -> tuple:
     )
 
 
-def _insert_parser_staging_with_conn(conn: sqlite3.Connection, messages: list[dict], fetched_at: str) -> int:
+def _insert_parser_staging_with_conn(conn: Connection, messages: list[dict], fetched_at: str) -> int:
     inserted = 0
     for message in messages:
         result = conn.execute(
             """
-            INSERT OR IGNORE INTO ingestion_parser_staging (
+            INSERT INTO email_ingest_staging (
                 email_account_id, email_address, gmail_message_id, thread_id,
                 from_header, to_header, subject, date_header, internal_date_ms,
                 gmail_received_at_utc, date_header_iso, snippet, fetched_at, raw_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (email_account_id, gmail_message_id) DO NOTHING
             """,
             _message_values(message, fetched_at),
         )
-        if result.rowcount > 0:
+        if result.rowcount and result.rowcount > 0:
             inserted += 1
     return inserted
 
@@ -53,14 +56,12 @@ def store_for_parser(messages: list[dict], keep_existing: bool = True) -> int:
     if not messages:
         return 0
     fetched_at = _now_iso()
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     try:
-        conn.execute("PRAGMA foreign_keys = ON;")
         if not keep_existing:
-            conn.execute("DELETE FROM ingestion_parser_staging")
+            conn.execute("DELETE FROM email_ingest_staging")
         inserted = _insert_parser_staging_with_conn(conn, messages, fetched_at)
         conn.commit()
         return inserted
     finally:
         conn.close()
-

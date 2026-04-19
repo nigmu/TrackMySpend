@@ -5,7 +5,7 @@ It does not yet create transactions—only stages rows that match parser rules.
 
 Tables & Ownership
 Stage-1 (ingestion-owned)
-ingestion_parser_staging
+email_ingest_staging
 
 Owner: ingestion layer writes
 Parser reads: stage-2 filtering in this module
@@ -18,22 +18,22 @@ Parser pickup query pattern (fast + safe):
 
 uses WHERE stage2_status IS NULL ORDER BY id ASC LIMIT ?
 Stage-2 (parser-owned)
-parsing_sender_regex_staging
+email_parse_queue_staging
 
 Owner: parsing layer inserts
-Dedupe: unique on (email_account_id, gmail_message_id, matched_pattern)
+Dedupe: unique on (email_account_id, gmail_message_id); `stg1_id` links back to `email_ingest_staging.id`
 State column (future): parse_status (currently not used by this stage)
 intended for later expansion (LLM parsing / transaction extraction)
 Current Stage-2 Rules (Sender Filter)
 Parsing currently applies these rules when moving rows from stage-1 → stage-2:
 
-Only consider stage-1 rows where ingestion_parser_staging.stage2_status IS NULL.
+Only consider stage-1 rows where email_ingest_staging.stage2_status IS NULL.
 For each candidate row:
 Read from_header
 If from_header contains any keyword from:
 src/global_configs.py → PARSER_FROM_HEADER_KEYWORDS
 If matched:
-insert into parsing_sender_regex_staging with matched_pattern = <keyword>
+insert into email_parse_queue_staging with matched_pattern = <keyword>
 mark stage-1 row as stage2_status = 'done'
 If not matched:
 mark stage-1 row as stage2_status = 'skipped'
@@ -68,9 +68,9 @@ skipped_by_from_header_keywords
 How to Think About This Pipeline (Now)
 Current flow:
 
-Ingestion poll fetches Gmail and stages rows into ingestion_parser_staging
+Ingestion poll fetches Gmail and stages rows into email_ingest_staging
 Parsing runs stage-2 filter:
 reads only unprocessed stage-1 rows (stage2_status IS NULL)
-inserts matches into parsing_sender_regex_staging
+inserts matches into email_parse_queue_staging
 updates stage2_status to done or skipped
-Future stages (later) should read from parsing_sender_regex_staging and populate transactions while using parse_status.
+Future stages (later) should read from email_parse_queue_staging and populate transactions while using parse_status.
