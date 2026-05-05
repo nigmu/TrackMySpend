@@ -263,6 +263,61 @@ def fetch_top_n_filtered_messages_for_all_accounts(top_n: int = 10) -> list[dict
     return results
 
 
+def _build_filtered_message_from_full(row: dict, full: dict) -> dict:
+    headers = _get_header_map(full.get("payload", {}))
+    raw_date = headers.get("Date")
+    internal_date_ms = full.get("internalDate")
+    return {
+        "account_id": row["id"],
+        "email_address": row["email_address"],
+        "gmail_message_id": full.get("id"),
+        "thread_id": full.get("threadId"),
+        "from": headers.get("From"),
+        "to": headers.get("To"),
+        "subject": headers.get("Subject"),
+        "date_header": raw_date,
+        "internal_date_ms": internal_date_ms,
+        "gmail_received_at_utc": _internal_date_ms_to_iso_utc(internal_date_ms),
+        "date_header_iso": _parse_header_date_to_iso(raw_date),
+        "snippet": full.get("snippet", ""),
+        # "full_body_text": _extract_text_from_payload(full.get("payload", {})),
+        "payload": full.get("payload", {}),
+    }
+
+
+def _fetch_recent_inbox_snapshot(
+    gmail,
+    row: dict,
+    *,
+    max_results: int = 25,
+) -> tuple[list[dict], str | None]:
+    """
+    Fetch a small recent inbox snapshot and return (messages, newest_history_id).
+    Used for first-run bootstrap and stale-history recovery.
+    """
+    resp = gmail.users().messages().list(
+        userId="me",
+        maxResults=max_results,
+        q="in:inbox",
+    ).execute()
+    msgs = resp.get("messages", [])
+    if not msgs:
+        return [], None
+
+    out: list[dict] = []
+    newest_history_id: str | None = None
+    for idx, msg in enumerate(msgs):
+        full = gmail.users().messages().get(
+            userId="me",
+            id=msg["id"],
+            format="full",
+        ).execute()
+        if idx == 0:
+            newest_history_id = full.get("historyId")
+        out.append(_build_filtered_message_from_full(row, full))
+    return out, newest_history_id
+
+
 def fetch_latest_filtered_messages_for_one_account(account_id: int) -> tuple[list[dict], str | None]:
     conn = connect()
     try:
@@ -286,37 +341,41 @@ def fetch_latest_filtered_messages_for_one_account(account_id: int) -> tuple[lis
 
         # FIRST RUN (bootstrap)
         if not last_history_id:
-            resp = gmail.users().messages().list(
-                userId="me",
-                maxResults=5,
-                q="in:inbox",
-            ).execute()
+            return _fetch_recent_inbox_snapshot(gmail, row, max_results=25)
 
-            msgs = resp.get("messages", [])
-            if not msgs:
-                return [], None
+        # INCREMENTAL with pagination. A single page can miss later events.
+        try:
+            new_ids: list[str] = []
+            latest_history_id = last_history_id
+            page_token: str | None = None
+            while True:
+                req = gmail.users().history().list(
+                    userId="me",
+                    startHistoryId=last_history_id,
+                    pageToken=page_token,
+                )
+                resp = req.execute()
+                latest_history_id = resp.get("historyId") or latest_history_id
 
-            full = gmail.users().messages().get(
-                userId="me",
-                id=msgs[0]["id"],
-                format="full",
-            ).execute()
+                for h in resp.get("history", []):
+                    for m in h.get("messagesAdded", []):
+                        msg = m.get("message") or {}
+                        msg_id = msg.get("id")
+                        if msg_id:
+                            new_ids.append(msg_id)
 
-            return [], full.get("historyId")
-
-        # INCREMENTAL
-        resp = gmail.users().history().list(
-            userId="me",
-            startHistoryId=last_history_id,
-        ).execute()
-
-        new_ids = []
-        for h in resp.get("history", []):
-            for m in h.get("messagesAdded", []):
-                new_ids.append(m["message"]["id"])
+                page_token = resp.get("nextPageToken")
+                if not page_token:
+                    break
+        except HttpError as exc:
+            # If the stored startHistoryId is too old/invalid, recover by taking
+            # a recent snapshot so sync can continue without getting stuck.
+            if getattr(exc, "resp", None) is not None and exc.resp.status == 404:
+                return _fetch_recent_inbox_snapshot(gmail, row, max_results=25)
+            raise
 
         out = []
-        for msg_id in new_ids:
+        for msg_id in sorted(set(new_ids)):
             try:
                 full = gmail.users().messages().get(
                     userId="me",
@@ -329,30 +388,9 @@ def fetch_latest_filtered_messages_for_one_account(account_id: int) -> tuple[lis
                 if getattr(exc, "resp", None) is not None and exc.resp.status == 404:
                     continue
                 raise
+            out.append(_build_filtered_message_from_full(row, full))
 
-            headers = _get_header_map(full.get("payload", {}))
-            raw_date = headers.get("Date")
-            internal_date_ms = full.get("internalDate")
-            out.append(
-                {
-                    "account_id": row["id"],
-                    "email_address": row["email_address"],
-                    "gmail_message_id": full.get("id"),
-                    "thread_id": full.get("threadId"),
-                    "from": headers.get("From"),
-                    "to": headers.get("To"),
-                    "subject": headers.get("Subject"),
-                    "date_header": raw_date,
-                    "internal_date_ms": internal_date_ms,
-                    "gmail_received_at_utc": _internal_date_ms_to_iso_utc(internal_date_ms),
-                    "date_header_iso": _parse_header_date_to_iso(raw_date),
-                    "snippet": full.get("snippet", ""),
-                    # "full_body_text": _extract_text_from_payload(full.get("payload", {})),
-                    "payload": full.get("payload", {}),
-                }
-            )
-
-        return out, resp.get("historyId")
+        return out, latest_history_id
 
     finally:
         conn.close()
