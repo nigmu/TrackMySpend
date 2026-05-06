@@ -15,11 +15,8 @@ llm_transaction_parser.py
 rule_parsed_transactions.json
 rule_transaction_parser.py
 rule_transaction_parser_2.py
-STRUCTURED_EMAIL.json
 parser_test.py
 # sqllite_to_postgress.py
-
-
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
