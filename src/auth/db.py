@@ -1,9 +1,14 @@
-from psycopg import Connection
+"""Database helpers for the auth module.
 
-from ..db_connection import connect
+Each function here performs one focused SQL operation on the
+`email_accounts` table. These helpers do not contain HTTP or OAuth logic.
+"""
+
+from psycopg import Connection
 
 
 def get_email_account_by_email(db: Connection, email_address: str) -> dict | None:
+    """Fetch one account's id/active status by email address."""
     row = db.execute(
         "SELECT id, is_active FROM email_accounts WHERE email_address = %s",
         (email_address,),
@@ -17,6 +22,7 @@ def update_email_account_tokens(
     encrypted_access_token: str,
     encrypted_refresh_token: str,
 ) -> None:
+    """Update encrypted OAuth tokens for an existing account and mark it active."""
     db.execute(
         """
         UPDATE email_accounts
@@ -37,6 +43,7 @@ def insert_email_account(
     encrypted_refresh_token: str,
     created_at: str,
 ) -> None:
+    """Insert a brand-new connected Gmail account row."""
     db.execute(
         """
         INSERT INTO email_accounts
@@ -49,6 +56,7 @@ def insert_email_account(
 
 
 def list_email_accounts(db: Connection) -> list[dict]:
+    """Return connected Gmail accounts ordered by creation time."""
     rows = db.execute(
         """
         SELECT id, email_address, polling_interval_min,
@@ -61,6 +69,7 @@ def list_email_accounts(db: Connection) -> list[dict]:
 
 
 def get_email_account_by_id(db: Connection, account_id: int) -> dict | None:
+    """Fetch a full account row by its internal account id."""
     row = db.execute(
         "SELECT * FROM email_accounts WHERE id = %s",
         (account_id,),
@@ -69,18 +78,26 @@ def get_email_account_by_id(db: Connection, account_id: int) -> dict | None:
 
 
 def delete_email_account_by_id(db: Connection, account_id: int) -> None:
+    """Delete one connected Gmail account by id."""
     db.execute("DELETE FROM email_accounts WHERE id = %s", (account_id,))
 
 
 def update_email_account_polling_interval(db: Connection, account_id: int, interval_min: int) -> None:
+    """Set a new polling interval (in minutes) for one account."""
     db.execute(
         "UPDATE email_accounts SET polling_interval_min = %s WHERE id = %s",
         (interval_min, account_id),
     )
 
 
-def select_account_token_row_by_email(db: Connection, email_address: str) -> dict | None:
-    return db.execute(
+def get_account_token_row(db: Connection, email_address: str) -> dict:
+    """
+    Return encrypted access and refresh tokens for one account email.
+
+    Raises:
+        ValueError: if no account exists for the given email address.
+    """
+    row = db.execute(
         """
         SELECT oauth_access_token, oauth_refresh_token
         FROM email_accounts
@@ -89,24 +106,13 @@ def select_account_token_row_by_email(db: Connection, email_address: str) -> dic
         (email_address,),
     ).fetchone()
 
-
-def get_account_token_row(email_address: str) -> dict:
-    """
-    Fetch encrypted token fields for a connected Gmail account.
-    Raises ValueError if the account row is not found.
-    """
-    conn = connect()
-    try:
-        row = select_account_token_row_by_email(conn, email_address)
-    finally:
-        conn.close()
-
     if not row:
         raise ValueError(f"No email_accounts row found for {email_address}.")
     return row
 
 
 def update_email_account_active_status(db: Connection, account_id: int, is_active: bool) -> None:
+    """Enable or disable an account without deleting its stored tokens."""
     db.execute(
         "UPDATE email_accounts SET is_active = %s WHERE id = %s",
         (is_active, account_id),

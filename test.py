@@ -20,6 +20,7 @@ from bs4 import BeautifulSoup
 from googleapiclient.discovery import build
 
 from src.auth.credentials import build_gmail_credentials_for_email
+from src.db_connection import connect
 
 # ─────────────────────────────────────────────
 # CONFIG
@@ -304,7 +305,11 @@ def extract_structured_email(raw_msg: dict) -> dict:
 # ─────────────────────────────────────────────
 
 def main() -> None:
-    creds   = build_gmail_credentials_for_email(EMAIL_ADDRESS)
+    db = connect()
+    try:
+        creds = build_gmail_credentials_for_email(db, EMAIL_ADDRESS)
+    finally:
+        db.close()
     service = build("gmail", "v1", credentials=creds)
 
     # Fetch raw message (format=full gives us headers + body parts)

@@ -1,3 +1,9 @@
+"""Central auth configuration values.
+
+This file loads OAuth-related settings from environment variables and
+defines the Gmail permission scopes used by the auth flow.
+"""
+
 import os
 from dotenv import load_dotenv
 
@@ -5,7 +11,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 def get_oauth_config() -> dict:
-    """Return the OAuth2 config dict expected by google-auth-oauthlib."""
+    """Build the OAuth client configuration expected by Google libraries."""
     return {
         "web": {
             "client_id": os.getenv("GOOGLE_CLIENT_ID"),

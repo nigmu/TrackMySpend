@@ -1,3 +1,6 @@
+# This script lets you get the history id from a message id for a given account id
+# It uses the Gmail API to get the history id from the message id
+
 import socket
 import time
 
