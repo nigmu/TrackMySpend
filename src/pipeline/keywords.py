@@ -1,7 +1,7 @@
 """Sender-keyword CRUD service.
 
 Keywords drive the stage-1 -> stage-2 sender filter. They live in the
-`parser_sender_keywords` table; if the table is empty we fall back to the
+`filter_keywords` table; if the table is empty we fall back to the
 seed list in `core.config.DEFAULT_PARSER_FROM_HEADER_KEYWORDS`.
 """
 

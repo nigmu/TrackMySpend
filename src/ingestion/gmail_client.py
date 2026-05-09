@@ -13,6 +13,9 @@ from src.core.security.crypto import decrypt_text
 
 from ..db.connection import connect
 
+DEFAULT_MAX_RESULTS = 1000
+
+
 def _build_creds(access_token_enc: str, refresh_token_enc: str) -> Credentials:
     oauth = get_oauth_config()["web"]
     return Credentials(
@@ -126,7 +129,7 @@ def fetch_top_n_raw_messages_for_one_account(account_id: int, top_n: int = 10) -
         row = conn.execute(
             """
             SELECT id, email_address, oauth_access_token, oauth_refresh_token, is_active
-            FROM email_accounts
+            FROM user_email_accounts
             WHERE id = %s
             """,
             (account_id,),
@@ -196,18 +199,34 @@ def _fetch_recent_inbox_snapshot(
     gmail,
     row: dict,
     *,
-    max_results: int = 25,
+    max_results: int = DEFAULT_MAX_RESULTS,
 ) -> tuple[list[dict], str | None]:
     """
     Fetch a small recent inbox snapshot and return (messages, newest_history_id).
     Used for first-run bootstrap and stale-history recovery.
     """
-    resp = gmail.users().messages().list(
-        userId="me",
-        maxResults=max_results,
-        q="in:inbox",
-    ).execute()
-    msgs = resp.get("messages", [])
+    # Gmail messages.list returns at most 500 rows per request.
+    # Paginate until we collect up to max_results.
+    msgs: list[dict] = []
+    page_token: str | None = None
+    while len(msgs) < max_results:
+        remaining = max_results - len(msgs)
+        batch_size = min(500, remaining)
+        req = gmail.users().messages().list(
+            userId="me",
+            maxResults=batch_size,
+            q="in:inbox",
+            pageToken=page_token,
+        )
+        resp = req.execute()
+        page_msgs = resp.get("messages", [])
+        if not page_msgs:
+            break
+        msgs.extend(page_msgs)
+        page_token = resp.get("nextPageToken")
+        if not page_token:
+            break
+
     if not msgs:
         return [], None
 
@@ -232,7 +251,7 @@ def fetch_latest_filtered_messages_for_one_account(account_id: int) -> tuple[lis
             """
             SELECT id, email_address, oauth_access_token, oauth_refresh_token,
                    is_active, last_history_id
-            FROM email_accounts
+            FROM user_email_accounts
             WHERE id = %s
             """,
             (account_id,),
@@ -245,20 +264,21 @@ def fetch_latest_filtered_messages_for_one_account(account_id: int) -> tuple[lis
         gmail = build("gmail", "v1", credentials=creds)
 
         last_history_id = row["last_history_id"]
+        start_history_id = str(last_history_id) if last_history_id is not None else None
 
         # FIRST RUN (bootstrap)
-        if not last_history_id:
-            return _fetch_recent_inbox_snapshot(gmail, row, max_results=25)
+        if not start_history_id:
+            return _fetch_recent_inbox_snapshot(gmail, row, max_results=DEFAULT_MAX_RESULTS)
 
         # INCREMENTAL with pagination. A single page can miss later events.
         try:
             new_ids: list[str] = []
-            latest_history_id = last_history_id
+            latest_history_id = start_history_id
             page_token: str | None = None
             while True:
                 req = gmail.users().history().list(
                     userId="me",
-                    startHistoryId=last_history_id,
+                    startHistoryId=start_history_id,
                     pageToken=page_token,
                 )
                 resp = req.execute()
@@ -278,7 +298,7 @@ def fetch_latest_filtered_messages_for_one_account(account_id: int) -> tuple[lis
             # If the stored startHistoryId is too old/invalid, recover by taking
             # a recent snapshot so sync can continue without getting stuck.
             if getattr(exc, "resp", None) is not None and exc.resp.status == 404:
-                return _fetch_recent_inbox_snapshot(gmail, row, max_results=25)
+                return _fetch_recent_inbox_snapshot(gmail, row, max_results=DEFAULT_MAX_RESULTS)
             raise
 
         out = []

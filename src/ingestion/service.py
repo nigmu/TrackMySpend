@@ -1,8 +1,8 @@
 """Ingestion service: orchestrates Gmail fetch + sync.
 
 This layer decides *when* to fetch and *what* to do with the result. It
-contains no SQL: persistence is delegated to `auth.db` (for `email_accounts`
-markers) and `pipeline.db` (for staging inserts via the stage-0 helper).
+contains no SQL: persistence is delegated to `auth.db` (for
+`user_email_accounts` markers) and `pipeline.db` (for staging inserts via the stage-0 helper).
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ def _now_iso() -> str:
 
 
 def _is_due_to_poll(
-    last_polled_at: str | None,
+    last_polled_at: str | datetime | None,
     polling_interval_min: int,
     now: datetime | None = None,
 ) -> bool:
@@ -36,7 +36,12 @@ def _is_due_to_poll(
         now = datetime.now(timezone.utc)
     if not last_polled_at:
         return True
-    last = datetime.fromisoformat(last_polled_at)
+    if isinstance(last_polled_at, datetime):
+        last = last_polled_at
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)
+    else:
+        last = datetime.fromisoformat(last_polled_at)
     age_sec = (now - last).total_seconds()
     return age_sec >= int(polling_interval_min) * 60
 

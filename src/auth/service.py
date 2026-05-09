@@ -137,8 +137,7 @@ def callback_service(code: str, state: str, db: Connection) -> JSONResponse:
             }
         )
 
-    now = datetime.now(timezone.utc).isoformat()
-    insert_email_account(db, email_address, encrypted_access, encrypted_refresh, now)
+    insert_email_account(db, email_address, encrypted_access, encrypted_refresh)
     db.commit()
     logger.info("gmail_account_connected")
     return JSONResponse(

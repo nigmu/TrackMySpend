@@ -4,10 +4,11 @@ import psycopg
 SQLITE_DB = "C:/NPersonal/Projects/TrackMySpend/DB/data/trackmyspend.db"
 PG_URL = "postgresql://postgres:nigmu@localhost:5432/trackmyspend"
 
+# Legacy SQLite export: table names must match the PostgreSQL target schema.
 TABLES = [
-    "email_accounts",
-    "email_ingest_staging",
-    "email_parse_queue_staging"
+    "user_email_accounts",
+    "email_raw_ingest",
+    "email_parse_queue",
 ]
 
 sqlite_conn = sqlite3.connect(SQLITE_DB)

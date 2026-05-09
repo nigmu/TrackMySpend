@@ -1,7 +1,7 @@
 """Stage 2 -> Transactions: parse snippets and insert into `transactions`.
 
 One run = one DB transaction. On any failure we rollback the whole run so
-no partial `parse_status = 'PARSED'` updates are persisted.
+no partial `etl_status = 'PARSED'` updates are persisted.
 """
 
 from __future__ import annotations
@@ -23,13 +23,13 @@ def run_staging_to_transactions(db: Connection) -> dict:
             parsed = parse_text(row["snippet"])
             transaction_type = parsed["type"]
             transaction_amount = int(parsed["amount"])
-            transaction_date = row["date_header"]
+            transaction_ts = row["email_sent_at"]
             pipeline_db.insert_transaction(
                 db,
-                stg2_id=row_id,
+                parse_queue_id=row_id,
                 transaction_type=transaction_type,
                 amount=transaction_amount,
-                transaction_date=transaction_date,
+                transaction_ts=transaction_ts,
             )
             pipeline_db.update_parse_status(db, row_id, "PARSED")
             inserted += 1

@@ -1,4 +1,4 @@
-"""Stage 0 -> Stage 1: write Gmail message dicts into `email_ingest_staging`."""
+"""Stage 0 -> Stage 1: write Gmail message dicts into `email_raw_ingest`."""
 
 from __future__ import annotations
 

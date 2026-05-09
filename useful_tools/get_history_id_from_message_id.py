@@ -22,13 +22,13 @@ message_id = "19da4476c4b26e58"  # set a real Gmail message id here
 conn = connect()
 row = conn.execute("""
     SELECT email_address, oauth_access_token, oauth_refresh_token
-    FROM email_accounts
+    FROM user_email_accounts
     WHERE id = %s
 """, (account_id,)).fetchone()
 conn.close()
 
 if not row:
-    raise ValueError(f"No email_accounts row found for account_id={account_id}")
+    raise ValueError(f"No user_email_accounts row found for account_id={account_id}")
 
 gmail = build("gmail", "v1", credentials=_build_creds(row["oauth_access_token"], row["oauth_refresh_token"]))
 
