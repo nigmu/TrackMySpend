@@ -13,7 +13,7 @@ from src.core.security.crypto import decrypt_text
 
 from ..db.connection import connect
 
-DEFAULT_MAX_RESULTS = 1000
+DEFAULT_MAX_RESULTS = 50
 
 
 def _build_creds(access_token_enc: str, refresh_token_enc: str) -> Credentials:

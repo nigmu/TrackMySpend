@@ -195,6 +195,31 @@ def fetch_pending_stage2_rows(db: Connection) -> list[dict]:
     return list(rows)
 
 
+def parse_queue_etl_counts(db: Connection) -> dict[str, int]:
+    """Counts by etl_status for observability (endpoint responses, debugging)."""
+    row = db.execute(
+        """
+        SELECT
+            COUNT(*) FILTER (WHERE etl_status = 'PENDING') AS pending,
+            COUNT(*) FILTER (WHERE etl_status = 'PARSED') AS parsed,
+            COUNT(*) AS total
+        FROM email_parse_queue
+        """
+    ).fetchone()
+    assert row is not None
+    return {
+        "pending": int(row["pending"]),
+        "parsed": int(row["parsed"]),
+        "total": int(row["total"]),
+    }
+
+
+def count_transactions(db: Connection) -> int:
+    row = db.execute("SELECT COUNT(*) AS n FROM transactions").fetchone()
+    assert row is not None
+    return int(row["n"])
+
+
 def update_parse_status(db: Connection, row_id: int, status: str = "PARSED") -> None:
     db.execute(
         "UPDATE email_parse_queue SET etl_status = %s WHERE id = %s",

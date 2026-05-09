@@ -17,6 +17,26 @@ def run_staging_to_transactions(db: Connection) -> dict:
     inserted = 0
     errors: list[str] = []
 
+    def _response(*, rolled_back: bool) -> dict:
+        pq = pipeline_db.parse_queue_etl_counts(db)
+        tx_n = pipeline_db.count_transactions(db)
+        tx_inserted = 0 if rolled_back else inserted
+        out = {
+            # Rows picked up from email_parse_queue with etl_status = PENDING (this run only).
+            "staging_rows_seen": len(rows),
+            "transactions_inserted": tx_inserted,
+            "errors": errors,
+            "rolled_back": rolled_back,
+            "parse_queue": pq,
+            "transactions_in_db": tx_n,
+        }
+        if not rows and pq["pending"] == 0 and pq["parsed"] > 0:
+            out["note"] = (
+                "No pending parse-queue rows; existing rows are already PARSED. "
+                "staging_rows_seen counts only PENDING rows processed in this request."
+            )
+        return out
+
     for row in rows:
         row_id = row["id"]
         try:
@@ -36,17 +56,7 @@ def run_staging_to_transactions(db: Connection) -> dict:
         except Exception as e:
             errors.append(f"stg id {row_id}: {e!s}")
             db.rollback()
-            return {
-                "staging_rows_seen": len(rows),
-                "transactions_inserted": 0,
-                "errors": errors,
-                "rolled_back": True,
-            }
+            return _response(rolled_back=True)
 
     db.commit()
-    return {
-        "staging_rows_seen": len(rows),
-        "transactions_inserted": inserted,
-        "errors": errors,
-        "rolled_back": False,
-    }
+    return _response(rolled_back=False)
