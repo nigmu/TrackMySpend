@@ -1,10 +1,12 @@
+"""Database connection helpers shared across modules."""
+
 from collections.abc import Generator
 
 import psycopg
 from psycopg import Connection
 from psycopg.rows import dict_row
 
-from .global_configs import DATABASE_URL
+from ..core.config import DATABASE_URL
 
 
 def connect() -> Connection:

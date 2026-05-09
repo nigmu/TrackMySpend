@@ -8,8 +8,8 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from httplib2.error import ServerNotFoundError
 
-from src.db_connection import connect
-from src.ingestion.email_fetcher import _build_creds
+from src.db.connection import connect
+from src.ingestion.gmail_client import _build_creds
 
 
 # current history id for account id 3 = 3157370

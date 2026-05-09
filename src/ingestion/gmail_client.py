@@ -9,9 +9,9 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from src.auth.config import GMAIL_SCOPES, get_oauth_config
-from src.security.crypto import decrypt_text
+from src.core.security.crypto import decrypt_text
 
-from ..db_connection import connect
+from ..db.connection import connect
 
 def _build_creds(access_token_enc: str, refresh_token_enc: str) -> Credentials:
     oauth = get_oauth_config()["web"]
@@ -168,99 +168,6 @@ def fetch_top_n_raw_messages_for_one_account(account_id: int, top_n: int = 10) -
         return out
     finally:
         conn.close()
-
-
-def fetch_top_n_filtered_messages_for_one_account(account_id: int, top_n: int = 10) -> list[dict]:
-    """
-    Fetch top N messages with essential fields only.
-    Includes From, Subject, Date, snippet, internal date, and parsed timestamps.
-    """
-    conn = connect()
-    try:
-        row = conn.execute(
-            """
-            SELECT id, email_address, oauth_access_token, oauth_refresh_token, is_active
-            FROM email_accounts
-            WHERE id = %s
-            """,
-            (account_id,),
-        ).fetchone()
-        if not row or not row["is_active"]:
-            return []
-
-        creds = _build_creds(row["oauth_access_token"], row["oauth_refresh_token"])
-        gmail = build("gmail", "v1", credentials=creds)
-
-        resp = gmail.users().messages().list(
-            userId="me",
-            maxResults=top_n,
-            q="in:inbox",
-        ).execute()
-
-        out = []
-        for m in resp.get("messages", []):
-            full = gmail.users().messages().get(
-                userId="me",
-                id=m["id"],
-                format="full",
-            ).execute()
-
-            headers = _get_header_map(full.get("payload", {}))
-            raw_date = headers.get("Date")
-            internal_date_ms = full.get("internalDate")
-            out.append(
-                {
-                    "account_id": row["id"],
-                    "email_address": row["email_address"],
-                    "gmail_message_id": full.get("id"),
-                    "thread_id": full.get("threadId"),
-                    "from": headers.get("From"),
-                    "to": headers.get("To"),
-                    "subject": headers.get("Subject"),
-                    "date_header": raw_date,
-                    "internal_date_ms": internal_date_ms,
-                    "gmail_received_at_utc": _internal_date_ms_to_iso_utc(internal_date_ms),
-                    "date_header_iso": _parse_header_date_to_iso(raw_date),
-                    "snippet": full.get("snippet", ""),
-                    # "full_body_text": _extract_text_from_payload(full.get("payload", {})),
-                }
-            )
-
-        return out
-    finally:
-        conn.close()
-
-
-def fetch_top_n_filtered_messages_for_all_accounts(top_n: int = 10) -> list[dict]:
-    """
-    Fetch top N filtered messages for every active account.
-    Returns one grouped result entry per account.
-    """
-    conn = connect()
-    try:
-        rows = conn.execute(
-            """
-            SELECT id, email_address
-            FROM email_accounts
-            WHERE is_active = TRUE
-            ORDER BY id ASC
-            """
-        ).fetchall()
-    finally:
-        conn.close()
-
-    results: list[dict] = []
-    for row in rows:
-        messages = fetch_top_n_filtered_messages_for_one_account(account_id=row["id"], top_n=top_n)
-        results.append(
-            {
-                "account_id": row["id"],
-                "email_address": row["email_address"],
-                "count": len(messages),
-                "messages": messages,
-            }
-        )
-    return results
 
 
 def _build_filtered_message_from_full(row: dict, full: dict) -> dict:

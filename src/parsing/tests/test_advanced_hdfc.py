@@ -1,9 +1,11 @@
+"""Pytest suite for the advanced HDFC parser."""
+
 import json
 from pathlib import Path
 
-from hdfc_rule_parser import parse_text
+from ..advanced_hdfc import parse_text
 
-SAMPLE_JSON = Path(__file__).parent / "SAMPLE_MAILS" / "HDFC.json"
+SAMPLE_JSON = Path(__file__).resolve().parents[1] / "SAMPLE_MAILS" / "HDFC.json"
 
 
 def load_sample_texts():

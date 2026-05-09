@@ -19,6 +19,8 @@ STRUCTURED_EMAIL.json
 parser_test.py
 # sqllite_to_postgress.py
 STRUCTURED_EMAIL_2.json
+app.log
+
 
 
 # Byte-compiled / optimized / DLL files

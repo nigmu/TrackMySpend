@@ -7,7 +7,7 @@ and returns a Google Credentials object that other modules can use.
 from psycopg import Connection
 from google.oauth2.credentials import Credentials
 
-from src.security.crypto import decrypt_text
+from src.core.security.crypto import decrypt_text
 
 from .config import GMAIL_SCOPES, get_oauth_config
 from .db import get_account_token_row

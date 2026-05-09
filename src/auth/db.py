@@ -117,3 +117,45 @@ def update_email_account_active_status(db: Connection, account_id: int, is_activ
         "UPDATE email_accounts SET is_active = %s WHERE id = %s",
         (is_active, account_id),
     )
+
+
+def update_last_polled_at(db: Connection, account_id: int, when_iso: str) -> None:
+    """Stamp the most recent successful poll for an account."""
+    db.execute(
+        "UPDATE email_accounts SET last_polled_at = %s WHERE id = %s",
+        (when_iso, account_id),
+    )
+
+
+def update_last_history_id(db: Connection, account_id: int, history_id: str | None) -> None:
+    """Persist the latest Gmail historyId so the next sync is incremental."""
+    if not history_id:
+        return
+    db.execute(
+        "UPDATE email_accounts SET last_history_id = %s WHERE id = %s",
+        (history_id, account_id),
+    )
+
+
+def list_active_accounts(db: Connection) -> list[dict]:
+    """Return active accounts with the fields needed for polling decisions."""
+    rows = db.execute(
+        """
+        SELECT id, email_address, polling_interval_min, last_polled_at
+        FROM email_accounts
+        WHERE is_active = TRUE
+        """
+    ).fetchall()
+    return list(rows)
+
+
+def get_account_sync_state(db: Connection, account_id: int) -> dict | None:
+    """Fetch the small slice of an account row used by the sync flow."""
+    return db.execute(
+        """
+        SELECT id, email_address, is_active
+        FROM email_accounts
+        WHERE id = %s
+        """,
+        (account_id,),
+    ).fetchone()

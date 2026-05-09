@@ -176,30 +176,7 @@ This gives a safe queue-like scan without relying on a fragile
 
 ## End-to-End Flow
 
-### A) Manual filtered top-N read
-
-1. API call:
-   - `GET /ingestion/accounts/1/messages/filtered/top-n?top_n=5`
-2. Route calls:
-   - `fetch_top_n_filtered_messages_for_one_account(1, 5)`
-3. Fetcher returns filtered message dicts.
-4. No staging row is written automatically in this path.
-5. No sync marker is updated.
-
-### B) Manual incremental sync for one account
-
-1. API call:
-   - `GET /ingestion/accounts/1/messages/filtered/latest`
-2. Route calls:
-   - `sync_latest_filtered_messages_for_one_account(1)`
-3. Poller:
-   - fetches incremental filtered messages
-   - stores them in `email_ingest_staging`
-   - updates `last_history_id`
-   - updates `last_polled_at`
-4. Response includes fetched messages plus `staged_for_parser`.
-
-### C) Background poll loop
+### A) Background poll loop
 
 1. `run_poller_loop()` wakes every ~30 seconds.
 2. Loads active accounts.
@@ -208,7 +185,7 @@ This gives a safe queue-like scan without relying on a fragile
 5. Stages fetched rows and updates sync markers.
 6. Sleeps again.
 
-### D) Parser stage-2 handoff
+### B) Parser stage-2 handoff
 
 1. Parsing reads from `email_ingest_staging`.
 2. It only scans rows with `stage2_status IS NULL`.
@@ -268,13 +245,6 @@ Base prefix: `/ingestion`
 
 - `GET /accounts/{account_id}/messages/raw/top-n?top_n=10`
   - returns top N raw Gmail messages
-
-- `GET /accounts/{account_id}/messages/filtered/top-n?top_n=10`
-  - returns top N filtered messages
-
-- `GET /accounts/{account_id}/messages/filtered/latest`
-  - runs incremental sync for one account
-  - stages fetched rows into `email_ingest_staging`
 
 - `GET /accounts/messages/filtered/latest`
   - runs incremental sync for all active accounts

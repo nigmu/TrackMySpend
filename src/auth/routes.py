@@ -7,7 +7,7 @@ work to service-layer functions where the business logic lives.
 from fastapi import APIRouter, Depends
 from psycopg import Connection
 
-from .dependencies import get_db
+from ..db.dependencies import get_db
 from .service import (
     callback_service,
     connect_gmail_service,

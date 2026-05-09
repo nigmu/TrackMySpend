@@ -82,28 +82,23 @@ def classify(text: str) -> tuple[str, str, str]:
     """
     t = text.lower()
 
-    # 1. Balance alert (before anything else; it has no 'debited'/'credited')
     if "dropped below" in t and "balance as of" in t:
         return ("balance_update", "bank_account", None)
 
-    # 2. E-mandate / auto payment
     if "e-mandate" in t or "auto payment" in t:
         if "credit card" in t:
             return ("auto payment", "credit_card", "credit_card")
         if "debit card" in t:
             return ("auto payment", "bank_account", "debit_card")
 
-    # 3. Reversal
     if "transaction reversal" in t or "reversal of rs" in t:
         if "credit card" in t:
             return ("reversal", "credit_card", "credit_card")
 
-    # 4. Credit
     if "credited to your account" in t or "is successfully credited" in t:
         if "vpa" in t or "upi transaction reference" in t:
             return ("credit", "bank_account", "upi")
 
-    # 5. Debit
     if "debited" in t:
         has_cc = "credit card" in t
         has_dc = "debit card" in t
@@ -127,21 +122,14 @@ def classify(text: str) -> tuple[str, str, str]:
 # ---------------------------------------------------------------------------
 
 def credit_bank_account_upi(text: str) -> dict:
-    """e.g. 'Rs. 240.00 is successfully credited to your account **2345 by VPA
-    demouser997-1@okaxis DEMO USER ...'"""
     out = _base_result("credit", "bank_account", "upi")
-
     out["amount"] = _first_amount(text)
 
     m = re.search(r"account\s*\**\s*(\d{4})", text, re.IGNORECASE)
     if m:
         out["account_last4"] = m.group(1)
 
-    m = re.search(
-        r"by\s+VPA\s+(\S+@\S+?)\s+(.+?)\s+on\s+\d",
-        text,
-        re.IGNORECASE,
-    )
+    m = re.search(r"by\s+VPA\s+(\S+@\S+?)\s+(.+?)\s+on\s+\d", text, re.IGNORECASE)
     if m:
         out["counterparty_vpa"] = m.group(1)
         out["counterparty"] = m.group(2).strip()
@@ -154,10 +142,7 @@ def credit_bank_account_upi(text: str) -> dict:
 
 
 def reversal_credit_card_credit_card(text: str) -> dict:
-    """e.g. 'Transaction reversal of Rs.14.35 ... Credit Card ending 4610.
-    From Merchant:A UBER INDIA SYSTE PVT L ...'"""
     out = _base_result("reversal", "credit_card", "credit_card")
-
     out["amount"] = _first_amount(text)
 
     m = re.search(r"Credit Card ending\s*(\d{4})", text, re.IGNORECASE)
@@ -172,21 +157,14 @@ def reversal_credit_card_credit_card(text: str) -> dict:
 
 
 def debit_bank_account_upi(text: str) -> dict:
-    """e.g. 'Rs.28.50 has been debited from account 2345 to VPA
-    aamarkolkatametro.76509181@hdfcbank AAMAR KOLKATA METRO ...'"""
     out = _base_result("debit", "bank_account", "upi")
-
     out["amount"] = _first_amount(text)
 
     m = re.search(r"from\s+account\s*\**\s*(\d{4})", text, re.IGNORECASE)
     if m:
         out["account_last4"] = m.group(1)
 
-    m = re.search(
-        r"to\s+VPA\s+(\S+@\S+?)\s+(.+?)\s+on\s+\d",
-        text,
-        re.IGNORECASE,
-    )
+    m = re.search(r"to\s+VPA\s+(\S+@\S+?)\s+(.+?)\s+on\s+\d", text, re.IGNORECASE)
     if m:
         out["counterparty_vpa"] = m.group(1)
         out["counterparty"] = m.group(2).strip()
@@ -199,10 +177,7 @@ def debit_bank_account_upi(text: str) -> dict:
 
 
 def debit_bank_account_debit_card(text: str) -> dict:
-    """e.g. 'Rs.120.00 is debited from your HDFC Bank Debit Card ending 4925
-    at MORE on 26 Mar, 2026 at 18:18:21.'"""
     out = _base_result("debit", "bank_account", "debit_card")
-
     out["amount"] = _first_amount(text)
 
     m = re.search(r"Debit Card ending\s*(\d{4})", text, re.IGNORECASE)
@@ -221,10 +196,7 @@ def debit_bank_account_debit_card(text: str) -> dict:
 
 
 def debit_credit_card_upi(text: str) -> dict:
-    """e.g. 'Rs.214.00 has been debited from your HDFC Bank RuPay Credit Card
-    XX6517 to swiggystores@icici Swiggy on 29-03-26 ...'"""
     out = _base_result("debit", "credit_card", "upi")
-
     out["amount"] = _first_amount(text)
 
     m = re.search(r"Credit Card\s*(?:XX)?(\d{4})", text, re.IGNORECASE)
@@ -248,10 +220,7 @@ def debit_credit_card_upi(text: str) -> dict:
 
 
 def debit_credit_card_credit_card(text: str) -> dict:
-    """e.g. 'Rs. 259.00 has been debited from your HDFC Bank Credit Card
-    ending 6517 towards EATCLUB BRANDS PRIVATE on 18 Apr, 2026 ...'"""
     out = _base_result("debit", "credit_card", "credit_card")
-
     out["amount"] = _first_amount(text)
 
     m = re.search(r"Credit Card ending\s*(\d{4})", text, re.IGNORECASE)
@@ -270,8 +239,6 @@ def debit_credit_card_credit_card(text: str) -> dict:
 
 
 def auto_payment_credit_card_credit_card(text: str) -> dict:
-    """e.g. 'Your payment for SPOTIFYINDIA is registered for E-mandate (Auto
-    payment) using your HDFC Bank Credit Card ending 6517 ...'"""
     out = _base_result("auto payment", "credit_card", "credit_card")
 
     m = re.search(r"payment\s+for\s+(.+?)\s+is\s+registered", text, re.IGNORECASE)
@@ -302,8 +269,6 @@ def auto_payment_credit_card_credit_card(text: str) -> dict:
 
 
 def auto_payment_bank_account_debit_card(text: str) -> dict:
-    """e.g. 'Your payment for Google Cloud is registered for E-mandate (Auto
-    payment) using your HDFC Bank Debit Card ending 4925 ...'"""
     out = _base_result("auto payment", "bank_account", "debit_card")
 
     m = re.search(r"payment\s+for\s+(.+?)\s+is\s+registered", text, re.IGNORECASE)
@@ -334,8 +299,6 @@ def auto_payment_bank_account_debit_card(text: str) -> dict:
 
 
 def balance_update_bank_account_null(text: str) -> dict:
-    """e.g. 'The balance in your account ending XX2345 has dropped below
-    Rs. INR 5,000.00 ... Balance as of yesterday: Rs. INR 78.71 ...'"""
     out = _base_result("balance_update", "bank_account", None)
 
     m = re.search(r"account ending\s*(?:XX)?(\d{4})", text, re.IGNORECASE)
@@ -383,14 +346,7 @@ def parse_texts(texts: list[str]) -> list[dict]:
     return [parse_text(t) for t in texts]
 
 
-# ---------------------------------------------------------------------------
-# Entrypoint / demo
-# ---------------------------------------------------------------------------
-
 if __name__ == "__main__":
-    # Demo: load the sample JSON, strip out ONLY the raw `text` fields
-    # (simulating real input: plain text, no type/instrument/channel hints),
-    # then run them through the classifier + parsers.
     with SAMPLE_JSON.open("r", encoding="utf-8") as f:
         records = json.load(f)
 

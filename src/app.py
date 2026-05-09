@@ -3,10 +3,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-from .auth.auth import router as gmail_router
-from .ingestion.ingest import router as ingestion_router
-from .parsing.parser import router as parsing_router
-from .pipeline.pipeline import router as pipeline_router
+from .auth import router as gmail_router
+from .ingestion import router as ingestion_router
+from .pipeline import router as pipeline_router
 from .core.logging import configure_logging, get_logger
 
 # always to be called first
@@ -34,7 +33,6 @@ app.add_middleware(
 
 app.include_router(gmail_router)
 app.include_router(ingestion_router)
-app.include_router(parsing_router)
 app.include_router(pipeline_router)
 
 

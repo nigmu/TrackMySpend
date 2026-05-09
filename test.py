@@ -20,7 +20,7 @@ from bs4 import BeautifulSoup
 from googleapiclient.discovery import build
 
 from src.auth.credentials import build_gmail_credentials_for_email
-from src.db_connection import connect
+from src.db.connection import connect
 
 # ─────────────────────────────────────────────
 # CONFIG

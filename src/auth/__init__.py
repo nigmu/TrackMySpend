@@ -1,5 +1,5 @@
-"""Auth package marker.
+"""Auth package: Gmail OAuth flow + account management."""
 
-This package contains the Gmail OAuth flow, auth API routes, and the
-database helpers needed to connect and manage Gmail accounts.
-"""
+from .routes import router
+
+__all__ = ["router"]

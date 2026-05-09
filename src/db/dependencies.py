@@ -1,14 +1,10 @@
-"""FastAPI dependencies used by auth routes.
-
-This module provides request-scoped helpers, such as opening and closing
-a database connection for each incoming API request.
-"""
+"""FastAPI request-scoped database dependency."""
 
 from collections.abc import Generator
 
 from psycopg import Connection
 
-from ..db_connection import connect
+from .connection import connect
 
 
 def get_db() -> Generator[Connection, None, None]:

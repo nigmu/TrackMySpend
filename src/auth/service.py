@@ -19,7 +19,7 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from psycopg import Connection
-from src.security.crypto import decrypt_text, encrypt_text
+from src.core.security.crypto import decrypt_text, encrypt_text
 
 from .config import GMAIL_SCOPES, get_oauth_config
 from .db import (
