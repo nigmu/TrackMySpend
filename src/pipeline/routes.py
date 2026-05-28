@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from ..db.dependencies import get_db
 from .keywords import add_sender_keyword, get_sender_keywords
+from . import db as pipeline_db
 from .stage1_to_stage2 import run_sender_filter
 from .stage2_to_transactions import run_staging_to_transactions
 
@@ -41,6 +42,17 @@ def post_run_stage1_to_stage2(
     limit: int = Query(default=200, ge=1, le=1000),
 ):
     return run_sender_filter(db, limit=limit)
+
+
+@router.get("/transactions")
+def get_transactions(
+    db: Connection = Depends(get_db),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+):
+    items = pipeline_db.list_transactions(db, limit=limit, offset=offset)
+    total = pipeline_db.count_transactions(db)
+    return {"count": len(items), "total": total, "transactions": items}
 
 
 @router.post("/transactions/load-from-staging")

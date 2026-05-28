@@ -220,6 +220,19 @@ def count_transactions(db: Connection) -> int:
     return int(row["n"])
 
 
+def list_transactions(db: Connection, *, limit: int = 50, offset: int = 0) -> list[dict]:
+    rows = db.execute(
+        """
+        SELECT id, parse_queue_id, transaction_type, amount, transaction_ts, etl_insert_ts
+        FROM transactions
+        ORDER BY COALESCE(transaction_ts, etl_insert_ts) DESC
+        LIMIT %s OFFSET %s
+        """,
+        (limit, offset),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def update_parse_status(db: Connection, row_id: int, status: str = "PARSED") -> None:
     db.execute(
         "UPDATE email_parse_queue SET etl_status = %s WHERE id = %s",

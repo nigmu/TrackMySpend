@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TrackMySpend</title>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <h1 class="logo">TrackMySpend</h1>
+        <p class="tagline">Pipeline control panel</p>
+        <nav class="nav" id="nav">
+          <button type="button" class="nav-link active" data-page="home">Home</button>
+          <button type="button" class="nav-link" data-page="accounts">Accounts</button>
+          <button type="button" class="nav-link" data-page="pipeline">Pipeline</button>
+          <button type="button" class="nav-link" data-page="keywords">Keywords</button>
+          <button type="button" class="nav-link" data-page="transactions">Transactions</button>
+        </nav>
+        <label class="api-label" for="api-base">API base URL</label>
+        <input
+          type="text"
+          id="api-base"
+          class="api-input"
+          value="http://localhost:8000"
+          spellcheck="false"
+        />
+      </aside>
+
+      <main class="main">
+        <section class="page active" id="page-home" data-page="home">
+          <header class="page-header">
+            <h2>Home</h2>
+            <button type="button" class="btn" id="btn-refresh-home">Refresh</button>
+          </header>
+          <div id="home-status" class="status-card">Checking API…</div>
+          <div class="stats" id="home-stats"></div>
+        </section>
+
+        <section class="page" id="page-accounts" data-page="accounts">
+          <header class="page-header">
+            <h2>Gmail accounts</h2>
+            <a class="btn btn-primary" id="btn-connect-gmail" href="#">Connect Gmail</a>
+          </header>
+          <div id="accounts-list" class="card-list"></div>
+        </section>
+
+        <section class="page" id="page-pipeline" data-page="pipeline">
+          <header class="page-header">
+            <h2>Pipeline</h2>
+          </header>
+          <p class="hint">Run steps in order: sync mail → filter to stage 2 → parse into transactions.</p>
+          <div class="actions">
+            <button type="button" class="btn btn-primary" id="btn-sync-mail">
+              1. Sync filtered mail
+            </button>
+            <button type="button" class="btn btn-primary" id="btn-stage1-stage2">
+              2. Stage 1 → Stage 2
+            </button>
+            <button type="button" class="btn btn-primary" id="btn-load-transactions">
+              3. Load transactions
+            </button>
+          </div>
+          <pre class="log" id="pipeline-log">No pipeline runs yet.</pre>
+        </section>
+
+        <section class="page" id="page-keywords" data-page="keywords">
+          <header class="page-header">
+            <h2>Sender keywords</h2>
+            <button type="button" class="btn" id="btn-refresh-keywords">Refresh</button>
+          </header>
+          <form class="inline-form" id="form-add-keyword">
+            <input
+              type="text"
+              id="keyword-input"
+              placeholder="e.g. alerts@hdfcbank.com"
+              required
+            />
+            <button type="submit" class="btn btn-primary">Add</button>
+          </form>
+          <ul class="keyword-list" id="keyword-list"></ul>
+        </section>
+
+        <section class="page" id="page-transactions" data-page="transactions">
+          <header class="page-header">
+            <h2>Transactions</h2>
+            <button type="button" class="btn" id="btn-refresh-transactions">Refresh</button>
+          </header>
+          <p class="hint" id="transactions-summary"></p>
+          <div class="table-wrap">
+            <table class="data-table" id="transactions-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Type</th>
+                  <th>Amount</th>
+                  <th>When</th>
+                </tr>
+              </thead>
+              <tbody id="transactions-body"></tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="toast" id="toast" hidden></div>
+
+    <script src="js/config.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/app.js"></script>
+  </body>
+</html>
