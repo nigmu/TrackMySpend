@@ -21,7 +21,7 @@ parser_test.py
 STRUCTURED_EMAIL_2.json
 app.log
 
-
+src/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

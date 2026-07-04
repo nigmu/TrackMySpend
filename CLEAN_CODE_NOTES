@@ -1,0 +1,8 @@
+Not touching AUTH folders or any configs related to that.
+
+Not touching CORE folders or any configs related to that.
+
+
+
+Starting from DB
+migate.py -- needs to be run after any DB schema chnages. 'python -m src.db.migrate'
