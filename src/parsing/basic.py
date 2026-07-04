@@ -1,7 +1,8 @@
-"""Very basic MVP parser for transaction emails.
+"""Bank-agnostic fallback parser for transaction emails.
 
 Returns:
-- type: credit, debit, reversal, auto payment, balance_update, or Not a Transaction
+- type: credit / debit / reversal / refund / emi / interest /
+        auto payment / balance_update / Not a Transaction
 - amount: integer paisa (0 when no amount applies)
 """
 
@@ -36,6 +37,15 @@ def transaction_type(text: str) -> str:
     if "transaction reversal" in normalized or "reversal of rs" in normalized:
         return "reversal"
 
+    if "refund" in normalized:
+        return "refund"
+
+    if "emi" in normalized or "installment" in normalized or "instalment" in normalized:
+        return "emi"
+
+    if "interest credited" in normalized or "interest of rs" in normalized:
+        return "interest"
+
     if "credited" in normalized or (
         "credit" in normalized and "credit card" not in normalized
     ):
@@ -58,7 +68,7 @@ def parse_text(text: str) -> dict:
     txn_type = transaction_type(text)
     if txn_type == "Not a Transaction":
         return {"type": txn_type, "amount": 0}
-    if txn_type in ("balance_update", "auto payment"):
+    if txn_type in ("balance_update", "auto payment", "interest"):
         return {"type": txn_type, "amount": 0}
     return {"type": txn_type, "amount": _parse_amount(text)}
 

@@ -76,7 +76,7 @@ def _strip_html_to_text(html: str) -> str:
     text = re.sub(r"(?is)<[^>]+>", " ", html)
     text = unescape(text)
     # Normalize whitespace.
-    text = re.sub(r"\\s+", " ", text).strip()
+    text = re.sub(r"\s+", " ", text).strip()
     return text
 
 
@@ -94,7 +94,7 @@ def _extract_text_from_payload(payload: dict | None, *, max_chars: int = 50000) 
     if mime_type.startswith("text/plain"):
         decoded = _decode_base64url_to_text(body_data)
         if decoded:
-            decoded = re.sub(r"\\s+", " ", decoded).strip()
+            decoded = re.sub(r"\s+", " ", decoded).strip()
             return decoded[:max_chars]
 
     # Search subparts first (often the real body is nested).
@@ -113,7 +113,7 @@ def _extract_text_from_payload(payload: dict | None, *, max_chars: int = 50000) 
     if body_data:
         decoded = _decode_base64url_to_text(body_data)
         if decoded:
-            decoded = re.sub(r"\\s+", " ", decoded).strip()
+            decoded = re.sub(r"\s+", " ", decoded).strip()
             return decoded[:max_chars]
 
     return ""

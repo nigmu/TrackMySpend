@@ -186,10 +186,15 @@ def insert_parse_queue_row(
 def fetch_pending_stage2_rows(db: Connection) -> list[dict]:
     rows = db.execute(
         """
-        SELECT id, snippet, email_sent_at
-        FROM email_parse_queue
-        WHERE etl_status = 'PENDING'
-        ORDER BY id ASC
+        SELECT
+            pq.id,
+            pq.snippet,
+            pq.email_sent_at,
+            ri.raw_payload_json
+        FROM email_parse_queue pq
+        JOIN email_raw_ingest ri ON ri.id = pq.raw_ingest_id
+        WHERE pq.etl_status = 'PENDING'
+        ORDER BY pq.id ASC
         """
     ).fetchall()
     return list(rows)
@@ -223,7 +228,11 @@ def count_transactions(db: Connection) -> int:
 def list_transactions(db: Connection, *, limit: int = 50, offset: int = 0) -> list[dict]:
     rows = db.execute(
         """
-        SELECT id, parse_queue_id, transaction_type, amount, transaction_ts, etl_insert_ts
+        SELECT
+            id, parse_queue_id, transaction_type, amount, transaction_ts,
+            bank, instrument, channel, account_last4,
+            counterparty, counterparty_vpa, reference_number, extras,
+            etl_insert_ts
         FROM transactions
         ORDER BY COALESCE(transaction_ts, etl_insert_ts) DESC
         LIMIT %s OFFSET %s
@@ -247,13 +256,30 @@ def insert_transaction(
     transaction_type: str,
     amount: int,
     transaction_ts: Any | None = None,
+    bank: str | None = None,
+    instrument: str | None = None,
+    channel: str | None = None,
+    account_last4: str | None = None,
+    counterparty: str | None = None,
+    counterparty_vpa: str | None = None,
+    reference_number: str | None = None,
+    extras: dict | None = None,
 ) -> None:
     db.execute(
         """
-        INSERT INTO transactions (parse_queue_id, transaction_type, amount, transaction_ts)
-        VALUES (%s, %s, %s, %s)
+        INSERT INTO transactions (
+            parse_queue_id, transaction_type, amount, transaction_ts,
+            bank, instrument, channel, account_last4,
+            counterparty, counterparty_vpa, reference_number, extras
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
         """,
-        (parse_queue_id, transaction_type, amount, transaction_ts),
+        (
+            parse_queue_id, transaction_type, amount, transaction_ts,
+            bank, instrument, channel, account_last4,
+            counterparty, counterparty_vpa, reference_number,
+            json.dumps(extras) if extras else None,
+        ),
     )
 
 

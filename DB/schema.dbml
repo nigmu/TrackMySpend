@@ -67,11 +67,19 @@ Table email_parse_queue {
 }
 
 Table transactions {
-  id                 bigint    [primary key, increment]
-  parse_queue_id     bigint    [not null, note: 'FK → email_parse_queue.id']
+  id                 bigint      [primary key, increment]
+  parse_queue_id     bigint      [not null, note: 'FK → email_parse_queue.id']
   transaction_type   varchar(20) [not null]
-  amount             bigint    [not null]
+  amount             bigint      [not null, note: 'Stored in paisa (1 INR = 100 paisa)']
   transaction_ts     timestamptz
+  bank               varchar(20) [note: 'Issuing bank, e.g. HDFC']
+  instrument         varchar(20) [note: 'bank_account / credit_card']
+  channel            varchar(20) [note: 'upi / neft / rtgs / imps / debit_card / credit_card / nach / emi / cash / atm']
+  account_last4      varchar(4)  [note: 'Last 4 digits of our card or account']
+  counterparty       text        [note: 'Merchant / person / service name']
+  counterparty_vpa   text        [note: 'UPI VPA or counterparty account reference']
+  reference_number   text        [note: 'UPI ref / UTR / NACH mandate ID']
+  extras             jsonb       [note: 'Type-specific extras: balance, threshold, frequency, installment details, location, etc.']
   etl_insert_ts      timestamptz [not null, default: `now()`]
   etl_update_ts      timestamptz [not null, default: `now()`]
 }
