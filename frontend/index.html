@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TrackMySpend</title>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <h1>TrackMySpend</h1>
+        <nav id="nav">
+          <button class="nav-link active" data-page="home">Home</button>
+          <button class="nav-link" data-page="accounts">Accounts</button>
+          <button class="nav-link" data-page="filters">Filters</button>
+          <button class="nav-link" data-page="mails">Mail</button>
+          <button class="nav-link" data-page="transactions">Transactions</button>
+        </nav>
+        <label>
+          API base
+          <input id="api-base" type="text" value="http://localhost:8000" />
+        </label>
+      </aside>
+      <main class="main">
+        <section class="page active" data-page="home">
+          <h2>Home</h2>
+          <div id="home-status" class="status-card">Checking API…</div>
+          <div id="home-stats" class="stats"></div>
+        </section>
+        <section class="page" data-page="accounts">
+          <h2>Accounts</h2>
+          <div class="row">
+            <button id="btn-connect-gmail">Connect Gmail</button>
+            <button id="btn-sync-all">Sync all</button>
+            <button id="btn-parse">Parse pending</button>
+          </div>
+          <div id="accounts-table"></div>
+        </section>
+        <section class="page" data-page="filters">
+          <h2>Sender filters</h2>
+          <form id="filter-form" class="row">
+            <input id="filter-pattern" type="text" placeholder="hdfcbank.bank.in" required />
+            <button type="submit">Add</button>
+          </form>
+          <div id="filters-table"></div>
+        </section>
+        <section class="page" data-page="mails">
+          <h2>Raw mail</h2>
+          <div id="mails-table"></div>
+        </section>
+        <section class="page" data-page="transactions">
+          <h2>Transactions</h2>
+          <div id="txns-table"></div>
+        </section>
+      </main>
+    </div>
+    <div id="toast" hidden></div>
+    <script src="js/config.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/app.js"></script>
+  </body>
+</html>
