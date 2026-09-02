@@ -62,13 +62,13 @@ Copy `app-debug.apk` to the phone and open it to install.
 
 1. Grant **SMS** permissions when prompted (`RECEIVE_SMS`, `READ_SMS`).
 2. **Filters** tab → add a sender pattern, e.g. `HDFCBK` (case-insensitive substring of the SMS address).
-3. **Servers** tab → add a name and URL, e.g. `http://192.168.1.63:9000`
+3. **Servers** tab → add a name and URL, e.g. `http://192.168.1.63:2005`
    - No trailing slash or path — the app appends `/health` and `/sms/ingest`.
    - Mark the server **Active**.
 4. Tap **Test** — expect `OK: {"status":"ok"}`.
 5. Matching SMS uploads appear on the **Log** tab (last 50 entries).
 
-Cleartext HTTP is allowed (`usesCleartextTraffic`) so LAN URLs like `http://192.168.x.x:9000` work without HTTPS.
+Cleartext HTTP is allowed (`usesCleartextTraffic`) so LAN URLs like `http://192.168.x.x:2005` work without HTTPS.
 
 ## OTA updates
 
@@ -86,8 +86,8 @@ If the URL is not set, **Check for updates** shows "Set update manifest URL firs
 Examples:
 
 ```
-http://192.168.1.63:9000/app/update.json
-http://100.x.x.x:9000/app/update.json
+http://192.168.1.63:2005/app/update.json
+http://100.x.x.x:2005/app/update.json
 ```
 
 The first time the installer runs, Android asks to allow **Install unknown apps** for this companion (`REQUEST_INSTALL_PACKAGES`). Allow it or install will not proceed.

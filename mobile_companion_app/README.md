@@ -19,7 +19,7 @@ Use a **real device** for SMS. Emulators do not receive carrier messages.
    cd mobile_companion_app/test_server
    cp .env.example .env          # Windows: copy .env.example .env
    pip install -r requirements.txt
-   uvicorn main:app --host 0.0.0.0 --port 9000
+   uvicorn main:app --host 0.0.0.0 --port 2005
    ```
 2. **Build and install the Android app** — see [android_app/README.md](android_app/README.md)
    - Open `android_app/` in Android Studio
@@ -28,7 +28,7 @@ Use a **real device** for SMS. Emulators do not receive carrier messages.
 3. **Configure on the phone**
    - Grant SMS permissions
    - **Filters** → add a sender pattern (e.g. `HDFCBK`)
-   - **Servers** → add `http://<your-lan-ip>:9000`, mark Active, tap **Test**
+   - **Servers** → add `http://<your-lan-ip>:2005`, mark Active, tap **Test**
 
 Matching SMS are POSTed as JSON `{sender, body, received_at, device_id}`. Upload attempts appear on the **Log** tab (last 50).
 
@@ -36,7 +36,7 @@ Matching SMS are POSTed as JSON `{sender, body, received_at, device_id}`. Upload
 
 Manual only — no check on launch. Manifest URL is separate from SMS servers (LAN, Tailnet, or HTTPS).
 
-1. Toolbar **☰** → **Update manifest URL…** → e.g. `http://<lan-ip>:9000/app/update.json`
+1. Toolbar **☰** → **Update manifest URL…** → e.g. `http://<lan-ip>:2005/app/update.json`
 2. **☰** → **Check for updates** — dialog only if `version_code` differs (upgrade or downgrade)
 
 Allow **Install unknown apps** for this companion when Android asks. New APKs must use the same signing key as the installed app.
