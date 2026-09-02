@@ -60,6 +60,15 @@ def get_logger(name: str) -> logging.Logger:
 
 
 class RequestLogMiddleware:
+    """Logs one line per HTTP request: method, path, status, duration, client, request id.
+
+    Implemented as raw ASGI (not Starlette's BaseHTTPMiddleware) because
+    BaseHTTPMiddleware buffers the whole response body in memory to read it,
+    which breaks streaming responses. Wrapping `send` directly lets responses
+    pass through untouched while we still see the status code and inject the
+    request id header.
+    """
+
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
         self._logger = get_logger("src.http")
@@ -85,6 +94,8 @@ class RequestLogMiddleware:
         status_code = 500
 
         async def send_wrapper(message: dict) -> None:
+            # Only the "http.response.start" ASGI event carries status + headers;
+            # body chunks ("http.response.body") pass through send() unmodified.
             nonlocal status_code
             if message["type"] == "http.response.start":
                 status_code = int(message["status"])

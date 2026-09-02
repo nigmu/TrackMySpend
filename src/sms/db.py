@@ -16,6 +16,13 @@ def sms_content_hash(
     received_at: datetime | None,
     device_id: str | None,
 ) -> str:
+    """Hash used to dedupe SMS ingest retries.
+
+    device_id is included so the same text from two different phones is
+    never merged into one row. received_at is included so a phone that
+    resends an old queued message doesn't collide with a new message that
+    happens to have identical sender/body text.
+    """
     received = received_at.isoformat() if received_at is not None else ""
     payload = "\n".join(
         [

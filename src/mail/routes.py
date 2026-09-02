@@ -2,9 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from psycopg import Connection
 
 from ..db.connection import get_db
-from . import db, service
+from . import db, parse, service
 
-router = APIRouter(tags=["Ingestion"])
+router = APIRouter(tags=["Mail"])
 
 
 @router.post("/sync")
@@ -30,3 +30,22 @@ def get_mails(
 ):
     items = db.list_mails(conn, limit=limit, offset=offset)
     return {"count": len(items), "total": db.count_mails(conn), "mails": items}
+
+
+@router.post("/parse")
+def post_parse(conn: Connection = Depends(get_db)):
+    return parse.parse_pending(conn)
+
+
+@router.get("/transactions")
+def get_transactions(
+    conn: Connection = Depends(get_db),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+):
+    items = parse.list_transactions(conn, limit=limit, offset=offset)
+    return {
+        "count": len(items),
+        "total": parse.count_transactions(conn),
+        "transactions": items,
+    }

@@ -1,9 +1,15 @@
+"""Background tick that syncs Gmail accounts on their own schedule.
+
+Mail is polled because Gmail has no push mechanism here. SMS has no equivalent
+poller: the Android app pushes directly to POST /sms/ingest.
+"""
+
 import asyncio
 
-from .core.config import POLLER_TICK_SEC
-from .core.logging import get_logger
-from .db.connection import connect
-from .ingestion.service import run_due_accounts
+from ..core.config import POLLER_TICK_SEC
+from ..core.logging import get_logger
+from ..db.connection import connect
+from .service import run_due_accounts
 
 logger = get_logger(__name__)
 

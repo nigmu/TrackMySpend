@@ -1,3 +1,18 @@
+"""Gmail sync orchestration.
+
+Two sync strategies, chosen per account:
+- Incremental: use the account's stored `last_history_id` with Gmail's History
+  API to fetch only what changed since the last sync. Cheap, used on every
+  normal tick.
+- Bootstrap: full search over `sender_filters` patterns, capped at
+  BOOTSTRAP_MESSAGE_COUNT. Used the first time an account is synced (no
+  history id yet), and as a fallback whenever the stored history id has gone
+  stale (see HistoryStale in gmail_client.py).
+
+Every sync is followed by a parse pass (src/mail/parse.py) so freshly ingested
+rows turn into transactions without a separate trigger.
+"""
+
 from psycopg import Connection
 
 from ..accounts import db as accounts_db
@@ -5,7 +20,6 @@ from ..core.config import BOOTSTRAP_MESSAGE_COUNT
 from ..core.logging import get_logger
 from ..filters.db import active_patterns
 from ..logs.db import insert_event_log
-from ..parsing.service import parse_pending
 from . import db
 from .gmail_client import (
     HistoryStale,
@@ -16,6 +30,7 @@ from .gmail_client import (
     list_history_message_ids,
     profile_history_id,
 )
+from .parse import parse_pending
 
 logger = get_logger(__name__)
 
@@ -66,7 +81,7 @@ def sync_one(conn: Connection, account: dict, trigger: str) -> dict:
     run_id = db.start_sync_run(conn, account_id, trigger)
     insert_event_log(
         "gmail.sync_started",
-        "ingestion",
+        "mail",
         f"Gmail sync started account_id={account_id} trigger={trigger}",
         context={"account_id": account_id, "trigger": trigger, "run_id": run_id},
     )
@@ -76,7 +91,7 @@ def sync_one(conn: Connection, account: dict, trigger: str) -> dict:
         logger.info("sync skipped account_id=%s reason=no_filters", account_id)
         insert_event_log(
             "gmail.sync_completed",
-            "ingestion",
+            "mail",
             f"Gmail sync skipped account_id={account_id} reason=no_filters",
             context={"account_id": account_id, "trigger": trigger},
         )
@@ -106,7 +121,7 @@ def sync_one(conn: Connection, account: dict, trigger: str) -> dict:
         )
         insert_event_log(
             "gmail.sync_completed",
-            "ingestion",
+            "mail",
             f"Gmail sync done account_id={account_id}",
             context={"account_id": account_id, "trigger": trigger, **stats},
         )
@@ -116,7 +131,7 @@ def sync_one(conn: Connection, account: dict, trigger: str) -> dict:
         logger.exception("sync failed account_id=%s", account_id)
         insert_event_log(
             "gmail.sync_failed",
-            "ingestion",
+            "mail",
             f"Gmail sync failed account_id={account_id}",
             severity="error",
             context={"account_id": account_id, "trigger": trigger, "error": str(exc)},

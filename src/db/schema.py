@@ -1,3 +1,14 @@
+"""Database schema, applied by migrate.py in order.
+
+Two independent pipelines, easy to tell apart by table prefix:
+  - Mail:  email_accounts, sender_filters, raw_mail_data, transactions, sync_runs
+           (raw_mail_data -> transactions is a one-to-one, populated by src/mail/parse.py)
+  - SMS:   raw_sms_data
+           (no transactions link yet — SMS is stored raw; parsing it into
+           transactions is the priority next step for this project, not yet built)
+  - Shared: app_event_logs (used by both pipelines + companion OTA)
+"""
+
 SCHEMA_STATEMENTS: list[str] = [
     """
     CREATE TABLE IF NOT EXISTS email_accounts (
@@ -45,6 +56,8 @@ SCHEMA_STATEMENTS: list[str] = [
         ON raw_mail_data (processing_status, id)
     """,
     """
+    -- Mail-only for now: raw_mail_id is NOT NULL, so every row must come
+    -- from an email. There is no raw_sms_id column; SMS is not parsed yet.
     CREATE TABLE IF NOT EXISTS transactions (
         id BIGSERIAL PRIMARY KEY,
         raw_mail_id BIGINT NOT NULL UNIQUE
@@ -69,6 +82,8 @@ SCHEMA_STATEMENTS: list[str] = [
     )
     """,
     """
+    -- SMS pipeline (src/sms). Stored as received; no transactions link yet.
+    -- content_hash (added below, in POST_SCHEMA_STATEMENTS) dedupes retries.
     CREATE TABLE IF NOT EXISTS raw_sms_data (
         id BIGSERIAL PRIMARY KEY,
         sender TEXT,
@@ -99,7 +114,13 @@ SCHEMA_STATEMENTS: list[str] = [
     """,
 ]
 
-# One-time compatibility: old test-server table `raw_sms` → `raw_sms_data`.
+# One-time compatibility: old test-server table `raw_sms` -> `raw_sms_data`.
+# Split into two halves by migrate.py: statement [0] (the rename) must run
+# BEFORE `CREATE TABLE IF NOT EXISTS raw_sms_data` above, otherwise the CREATE
+# would win the race and silently strand any old `raw_sms` data. Statements
+# [1:] (column adds, hash backfill, NOT NULL, unique index) must run AFTER,
+# once the table is guaranteed to exist. Safe to delete this whole list once
+# every deployment has migrated past the old `raw_sms` table name.
 POST_SCHEMA_STATEMENTS: list[str] = [
     """
     DO $$

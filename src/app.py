@@ -18,10 +18,9 @@ from .accounts.routes import router as accounts_router
 from .companion.routes import RELEASES_DIR
 from .companion.routes import router as companion_router
 from .filters.routes import router as filters_router
-from .ingestion.routes import router as ingestion_router
 from .logs.routes import router as logs_router
-from .parsing.routes import router as parsing_router
-from .scheduler import poller_loop
+from .mail.poller import poller_loop
+from .mail.routes import router as mail_router
 from .sms.routes import router as sms_router
 
 
@@ -59,10 +58,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Two independent data pipelines, each with its own raw table and its own routes:
+#   mail  (src/mail)  Gmail OAuth -> sync -> raw_mail_data -> parse -> transactions
+#   sms   (src/sms)   Android app -> POST /sms/ingest -> raw_sms_data (not yet parsed)
+# Shared/cross-cutting: accounts (Gmail OAuth creds), filters (Gmail sender_filters),
+# logs (app_event_logs), companion (Android OTA distribution).
 app.include_router(accounts_router)
 app.include_router(filters_router)
-app.include_router(ingestion_router)
-app.include_router(parsing_router)
+app.include_router(mail_router)
 app.include_router(sms_router)
 app.include_router(logs_router)
 app.include_router(companion_router)

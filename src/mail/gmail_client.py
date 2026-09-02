@@ -12,7 +12,12 @@ logger = get_logger(__name__)
 
 
 class HistoryStale(Exception):
-    pass
+    """Gmail's historyId has expired (too much time/change since it was issued).
+
+    Gmail only keeps history for a limited window. When a stored historyId falls
+    outside that window, the History API returns 404 instead of a diff. The only
+    correct recovery is to fall back to a full bootstrap search (see service.py).
+    """
 
 
 def gmail_service(account: dict):

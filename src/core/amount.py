@@ -1,4 +1,10 @@
-"""Extract the first rupee amount from text and return integer paisa."""
+"""Extract the first rupee amount from text and return integer paisa.
+
+Source-agnostic: used today by the mail pipeline (src/mail/parse.py). Any
+future SMS transaction parser should reuse this directly rather than
+duplicating it, since bank SMS and bank email alerts use the same
+"Rs./INR <amount>" phrasing.
+"""
 
 from __future__ import annotations
 

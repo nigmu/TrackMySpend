@@ -1,6 +1,11 @@
 # TrackMySpend
 
-Personal tracker: Gmail bank alerts and phone SMS land in Postgres. Mail is parsed into amount-only `transactions`. SMS is stored raw for now.
+Two intentionally separate pipelines share one Postgres database and one API:
+
+- **Mail** (`src/mail/`) — Gmail bank alerts, fully wired: sync → parse → `transactions`.
+- **SMS** (`src/sms/`) — phone SMS, stored raw for now. **This is the priority direction for new work**: turning `raw_sms_data` into `transactions` (mirroring mail) is the next real feature, not yet built.
+
+They do not share code beyond generic utilities (`src/core/`) and the shared event log (`src/logs/`).
 
 ```
 email_accounts + sender_filters          Android companion (phone-local filters)
@@ -9,8 +14,8 @@ email_accounts + sender_filters          Android companion (phone-local filters)
         │    From must match a sender_filter      optional X-TrackMySpend-Token
         ▼                                         ▼
   raw_mail_data                              raw_sms_data
-        │
-     [parse]  auto after sync, or POST /parse
+        │                                         │
+     [parse]  auto after sync, or POST /parse      (no parser yet — planned next)
         ▼
   transactions (amount_paisa)
 ```
@@ -28,21 +33,23 @@ There is no separate SMS server and no port 2005.
 
 ```
 src/                  FastAPI app
-  accounts/           Gmail OAuth
-  filters/            Gmail sender filters (server-side)
-  ingestion/          Gmail sync → raw_mail_data
-  parsing/            mail → transactions
-  sms/                POST /sms/ingest, GET /sms
-  companion/          GET /app/update.json
-  logs/               GET /logs  (app_event_logs)
-  core/               config, file logging, request logging
-  db/                 schema + migrate
+  mail/               Gmail pipeline: gmail_client, db, service (sync), parse,
+                       poller, routes → /sync /mails /parse /transactions
+  sms/                SMS pipeline: db, routes → /sms/ingest /sms
+  accounts/           Gmail OAuth credentials (mail-only, not shared with sms)
+  filters/            Gmail sender_filters (mail-only; SMS filters live on the phone)
+  companion/          Android OTA: GET /app/update.json, GET /releases/*
+  logs/               app_event_logs, shared by mail + sms + companion
+  core/               config, file logging, request logging, crypto, amount parser
+  db/                 schema + migrate + connection
 frontend/             static UI (port 2007)
 releases/companion/   OTA manifest + APKs (served from port 2006)
 mobile_companion_app/android_app/   Kotlin client
 bin/trackmyspend-run.sh             API + UI together
 deploy/TrackMySpend.service         systemd unit
 ```
+
+`src/mail/` and `src/sms/` are deliberately symmetric siblings — same shape (`db.py` + `routes.py` + domain logic), same shared dependencies (`core`, `logs`), no cross-imports between them.
 
 ## Setup
 
@@ -118,8 +125,14 @@ Copy `.env.example`. Used values:
 Self-checks:
 
 ```bash
-python -m src.parsing.amount
+python -m src.core.amount
 python -m src.sms.db
+```
+
+Unit tests (pure logic only — no DB required):
+
+```bash
+python -m unittest discover -s tests -v
 ```
 
 ## Linux (systemd)

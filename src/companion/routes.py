@@ -24,6 +24,10 @@ def _fallback_manifest() -> dict:
 
 @router.get("/app/update.json")
 def app_update():
+    # Two distinct failure modes get distinct event types, since they imply
+    # different fixes: "missing" means nobody has published a release yet
+    # (expected on a fresh install); "unreadable" means update.json exists
+    # but is malformed JSON (a real bug in the last publish step).
     if not UPDATE_JSON.is_file():
         logger.warning("companion manifest missing path=%s", UPDATE_JSON)
         insert_event_log(
