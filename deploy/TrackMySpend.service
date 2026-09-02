@@ -1,0 +1,23 @@
+[Unit]
+Description=TrackMySpend (API :2006, UI :2007, SMS :2005)
+Documentation=file:///home/nigam/projects/TrackMySpend/README.md
+After=network-online.target postgresql.service
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=nigam
+Group=nigam
+WorkingDirectory=/home/nigam/projects/TrackMySpend
+EnvironmentFile=-/home/nigam/projects/TrackMySpend/.env
+ExecStart=/home/nigam/projects/TrackMySpend/bin/trackmyspend-run.sh
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+KillMode=mixed
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

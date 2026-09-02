@@ -33,13 +33,36 @@ email_accounts + sender_filters
    python main.py
    ```
 
+   API: http://localhost:2006
+
 5. Frontend:
 
    ```bash
-   python -m http.server 8080 --directory frontend
+   python -m http.server 2007 --directory frontend
    ```
 
-   Open http://localhost:8080
+   Open http://localhost:2007
+
+## Ports
+
+| Service | Port |
+|---------|------|
+| Main API | 2006 |
+| Frontend UI | 2007 |
+| SMS companion ingest | 2005 |
+
+## Linux (systemd)
+
+All three processes run together via `deploy/TrackMySpend.service` and `bin/trackmyspend-run.sh`. On the server:
+
+```bash
+chmod +x bin/trackmyspend-run.sh
+sudo cp deploy/TrackMySpend.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now TrackMySpend.service
+```
+
+Set `FRONTEND_ORIGIN` and `GOOGLE_REDIRECT_URI` in `.env` to match your host and these ports.
 
 ## APIs
 
