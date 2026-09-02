@@ -68,4 +68,85 @@ SCHEMA_STATEMENTS: list[str] = [
         error_message TEXT
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS raw_sms_data (
+        id BIGSERIAL PRIMARY KEY,
+        sender TEXT,
+        body TEXT NOT NULL,
+        received_at TIMESTAMPTZ,
+        device_id TEXT,
+        processing_status TEXT NOT NULL DEFAULT 'pending',
+        error_message TEXT,
+        content_hash TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS app_event_logs (
+        id BIGSERIAL PRIMARY KEY,
+        event_type TEXT NOT NULL,
+        source TEXT NOT NULL,
+        severity TEXT NOT NULL DEFAULT 'info',
+        message TEXT NOT NULL,
+        context JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_app_event_logs_created_at
+        ON app_event_logs (created_at DESC, id DESC)
+    """,
+]
+
+# One-time compatibility: old test-server table `raw_sms` → `raw_sms_data`.
+POST_SCHEMA_STATEMENTS: list[str] = [
+    """
+    DO $$
+    BEGIN
+        IF to_regclass('public.raw_sms') IS NOT NULL
+           AND to_regclass('public.raw_sms_data') IS NULL THEN
+            ALTER TABLE raw_sms RENAME TO raw_sms_data;
+        END IF;
+    END $$
+    """,
+    """
+    ALTER TABLE raw_sms_data
+        ADD COLUMN IF NOT EXISTS processing_status TEXT NOT NULL DEFAULT 'pending'
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_raw_sms_data_status_id
+        ON raw_sms_data (processing_status, id)
+    """,
+    """
+    ALTER TABLE raw_sms_data
+        ADD COLUMN IF NOT EXISTS error_message TEXT
+    """,
+    """
+    ALTER TABLE raw_sms_data
+        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    """,
+    """
+    ALTER TABLE raw_sms_data
+        ADD COLUMN IF NOT EXISTS content_hash TEXT
+    """,
+    """
+    UPDATE raw_sms_data
+    SET content_hash = md5(
+        id::text || E'\\n' ||
+        COALESCE(sender, '') || E'\\n' ||
+        body || E'\\n' ||
+        COALESCE(received_at::text, '') || E'\\n' ||
+        COALESCE(device_id, '')
+    )
+    WHERE content_hash IS NULL
+    """,
+    """
+    ALTER TABLE raw_sms_data
+        ALTER COLUMN content_hash SET NOT NULL
+    """,
+    """
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_raw_sms_data_content_hash
+        ON raw_sms_data (content_hash)
+    """,
 ]

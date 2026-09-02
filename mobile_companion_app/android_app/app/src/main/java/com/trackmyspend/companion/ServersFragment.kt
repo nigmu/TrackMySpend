@@ -72,6 +72,7 @@ class ServersFragment : Fragment() {
         existing?.let {
             dialogBinding.nameInput.setText(it.name)
             dialogBinding.urlInput.setText(it.url)
+            dialogBinding.tokenInput.setText(it.token)
         }
         val title = if (existing == null) R.string.add_server else R.string.edit_server
         MaterialAlertDialogBuilder(requireContext())
@@ -80,11 +81,12 @@ class ServersFragment : Fragment() {
             .setPositiveButton(R.string.save) { _, _ ->
                 val name = dialogBinding.nameInput.text?.toString().orEmpty()
                 val url = dialogBinding.urlInput.text?.toString().orEmpty()
+                val token = dialogBinding.tokenInput.text?.toString().orEmpty()
                 if (name.isBlank() || url.isBlank()) return@setPositiveButton
                 if (existing == null) {
-                    prefs.addServer(name, url)
+                    prefs.addServer(name, url, token)
                 } else {
-                    prefs.updateServer(existing.id, name, url)
+                    prefs.updateServer(existing.id, name, url, token)
                 }
                 refreshList()
             }

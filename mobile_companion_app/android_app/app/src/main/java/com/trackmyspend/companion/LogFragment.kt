@@ -83,6 +83,19 @@ class LogFragment : Fragment() {
                 itemBinding.statusText.setTextColor(
                     ContextCompat.getColor(itemBinding.root.context, color)
                 )
+                val details = buildString {
+                    if (entry.serverUrl.isNotBlank()) append(entry.serverUrl)
+                    if (entry.httpCode != null) {
+                        if (isNotEmpty()) append(" · ")
+                        append("HTTP ${entry.httpCode}")
+                    }
+                }
+                if (details.isBlank()) {
+                    itemBinding.detailText.visibility = View.GONE
+                } else {
+                    itemBinding.detailText.visibility = View.VISIBLE
+                    itemBinding.detailText.text = details
+                }
             }
         }
     }

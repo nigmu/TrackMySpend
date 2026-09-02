@@ -1,36 +1,36 @@
 # TrackMySpend Companion (Android)
 
-Kotlin app that listens for matching SMS and POSTs them to a server (`/sms/ingest`).
+Listens for matching SMS and POSTs them to the TrackMySpend API on port **2006** (`/sms/ingest`).
 
 | | |
 |---|---|
-| Package | `com.trackmyspend.companion` |
+| Package / applicationId | `com.trackmyspend.companion` |
 | Min SDK | 26 (Android 8.0) |
-| Target SDK | 34 |
+| Target / compile SDK | 34 |
+| versionCode / versionName | `1` / `1.0` (see `app/build.gradle.kts`) |
 
-Use a **real phone** for SMS. Emulators do not receive carrier messages.
+Use a **real phone**. Emulators do not receive carrier SMS.
+
+The ingest host is the main app (`python main.py`), not a sidecar. If this phone was configured for port **2005**, edit the server URL to **2006**.
 
 ## Prerequisites
 
-- [Android Studio](https://developer.android.com/studio) (recent stable release)
-- JDK 17 — **File → Settings → Build, Execution, Deployment → Build Tools → Gradle → Gradle JDK**
+- [Android Studio](https://developer.android.com/studio)
+- JDK **17** — **File → Settings → Build, Execution, Deployment → Build Tools → Gradle → Gradle JDK**
 - Android SDK Platform **34** — **Tools → SDK Manager → SDK Platforms**
 
 ## Open the project
 
 1. **File → Open**
 2. Select this folder (`mobile_companion_app/android_app`), not the repo root.
-3. Wait for Gradle sync to finish (`BUILD SUCCESSFUL` in the Build tool window).
+3. Wait for Gradle sync (`BUILD SUCCESSFUL`).
 
 ## Build a debug APK
 
 ### Android Studio
 
 1. **Build → Generate App Bundle(s) / APK(s) → Generate APK(s)**
-   (Older Studio versions: **Build → Build Bundle(s) / APK(s) → Build APK(s)**)
-2. When the notification appears, click **locate**.
-
-Output:
+2. Click **locate** on the notification.
 
 ```
 app/build/outputs/apk/debug/app-debug.apk
@@ -43,70 +43,87 @@ cd mobile_companion_app\android_app
 .\gradlew.bat assembleDebug
 ```
 
-Same APK path as above.
+Same APK path.
 
-## Install on a device
+## Install
 
-### Run from Android Studio (recommended)
+**Android Studio:** enable **Developer options → USB debugging**, connect the phone, Run ▶.
 
-1. Enable **Developer options → USB debugging** on the phone.
-2. Connect via USB; accept the debugging prompt.
-3. Select the phone in the device dropdown (top toolbar).
-4. Click the green **Run ▶** button.
+**Manual:** copy `app-debug.apk` to the phone and open it.
 
-### Manual install
+## Configure
 
-Copy `app-debug.apk` to the phone and open it to install.
+1. Grant **SMS** (`RECEIVE_SMS`, `READ_SMS`).
+2. **Filters** — sender substring, e.g. `HDFCBK` (case-insensitive). These filters are **only on the phone**. They are not the Gmail filters in the web UI.
+3. **Servers** — name + URL, e.g. `http://192.168.1.63:2006`
+   - No trailing slash or path. The app appends `/health` and `/sms/ingest`.
+   - Optional ingest token: must match server `SMS_INGEST_TOKEN` (header `X-TrackMySpend-Token`). Leave empty if the server token is unset.
+   - Mark **Active**.
+4. **Test** — expect `OK: {"status":"ok"}`.
+5. **Log** — last 50 uploads, with target URL and HTTP status.
 
-## Configure the app
+Cleartext HTTP is allowed (`usesCleartextTraffic`) so LAN `http://192.168.x.x:2006` works.
 
-1. Grant **SMS** permissions when prompted (`RECEIVE_SMS`, `READ_SMS`).
-2. **Filters** tab → add a sender pattern, e.g. `HDFCBK` (case-insensitive substring of the SMS address).
-3. **Servers** tab → add a name and URL, e.g. `http://192.168.1.63:2005`
-   - No trailing slash or path — the app appends `/health` and `/sms/ingest`.
-   - Mark the server **Active**.
-4. Tap **Test** — expect `OK: {"status":"ok"}`.
-5. Matching SMS uploads appear on the **Log** tab (last 50 entries).
-
-Cleartext HTTP is allowed (`usesCleartextTraffic`) so LAN URLs like `http://192.168.x.x:2005` work without HTTPS.
+Ingested rows show on the web UI **SMS** page (`GET /sms`). Events show on **Logs**.
 
 ## OTA updates
 
-Manual only. The app never checks on launch and never pops a dialog unless you tap **Check for updates** and the manifest `version_code` is different from the installed app.
+Manual. Nothing runs on launch. Manifest URL is independent of the SMS server list.
 
-Toolbar **☰** (left of the title) — independent of SMS server config:
+Toolbar **☰**:
 
-| Menu item | What it does |
-|-----------|----------------|
-| **Update manifest URL…** | Full URL to a JSON manifest. LAN, Tailnet, or HTTPS. Empty URL is allowed (clears the saved value). |
-| **Check for updates** | Fetches that URL. Same `version_code` → Snackbar "Up to date". Different → dialog (optional `changelog`) with **Update** or **Downgrade**, then download + system installer. |
+| Menu | Behavior |
+|------|----------|
+| **Update manifest URL…** | Full URL to JSON. LAN, Tailnet, or HTTPS. Empty clears it. |
+| **Check for updates** | Same `version_code` → "Up to date". Different → Update/Downgrade, then download + installer. |
 
-If the URL is not set, **Check for updates** shows "Set update manifest URL first".
+If the URL is empty: "Set update manifest URL first".
 
 Examples:
 
 ```
-http://192.168.1.63:2005/app/update.json
-http://100.x.x.x:2005/app/update.json
+http://192.168.1.63:2006/app/update.json
+http://100.x.x.x:2006/app/update.json
 ```
 
-The first time the installer runs, Android asks to allow **Install unknown apps** for this companion (`REQUEST_INSTALL_PACKAGES`). Allow it or install will not proceed.
+Hosted by the main API from `releases/companion/`:
 
-The APK must be signed with the **same key** as the installed app (debug keystore to debug, or the same release key). Android may refuse a lower `version_code` unless you uninstall first.
+- `GET /app/update.json`
+- `GET /releases/{filename}`
 
-See `../test_server/README.md` to host `update.json` and APKs.
+First install of an OTA APK: allow **Install unknown apps** (`REQUEST_INSTALL_PACKAGES`). APK must use the **same signing key** as the app on the phone.
+
+### Publish a release
+
+1. Bump `versionCode` / `versionName` in `app/build.gradle.kts`.
+2. `.\gradlew.bat assembleDebug` (or `assembleRelease`), same key as the installed app.
+3. Copy APK to `releases/companion/companion-{version}.apk` (APKs are gitignored).
+4. Edit `releases/companion/update.json`:
+
+   ```json
+   {
+     "version_code": 2,
+     "version_name": "1.1",
+     "apk_url": "http://192.168.1.63:2006/releases/companion-1.1.apk",
+     "changelog": "- notes"
+   }
+   ```
+
+   `apk_url` must be a host the phone can reach (LAN vs Tailnet). Filename must exist under `releases/companion/`.
+
+5. Phone: ☰ → **Update manifest URL…** → `http://<ip>:2006/app/update.json`
+6. ☰ → **Check for updates**
 
 ## Troubleshooting
 
 | Problem | Fix |
 |---------|-----|
-| Gradle sync fails | Install SDK 34; set Gradle JDK to 17 |
-| Test connection fails | Phone and server must be on the same LAN; server must bind `0.0.0.0`, not `127.0.0.1` |
-| SMS not forwarded | Check Filters pattern; confirm SMS permissions are granted |
-| No device in Run dropdown | Enable USB debugging; install phone USB drivers if needed |
+| Gradle sync fails | SDK 34; Gradle JDK 17 |
+| Test fails / connection refused | Phone and API on the same network; API binds `0.0.0.0:2006`; URL is `:2006` not `:2005` or `127.0.0.1` |
+| SMS not forwarded | Filter pattern; SMS permissions |
+| Ingest `401` | Server dialog token = `SMS_INGEST_TOKEN` |
+| No device in Run | USB debugging; OEM USB drivers |
 | "Set update manifest URL first" | ☰ → **Update manifest URL…** |
 | Installer does not open | Allow **Install unknown apps** for this app |
-| APK download fails | `apk_url` in the manifest must use a host the phone can reach (same IP as the manifest URL) |
+| APK download fails | `apk_url` host must match what the phone can reach; file must exist under `releases/companion/` |
 | "App not installed" after OTA | Signing key mismatch, or downgrade blocked — uninstall first |
-
-See `../test_server/README.md` for starting the backend.

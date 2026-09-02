@@ -1,51 +1,74 @@
 # SMS companion
 
-Phone SMS → FastAPI `POST /sms/ingest` → Postgres `raw_sms`.
+Android app that forwards matching SMS to the **main TrackMySpend API** (port **2006**). There is no separate ingest server.
 
 ```
-android_app/          Kotlin Views app (Filters / Servers / Log)
-  SmsReceiver         matches sender filters, then uploads
+phone SMS
+  → android_app Filters (local substring match)
+  → POST http://<host>:2006/sms/ingest
+  → Postgres raw_sms_data
+  → UI SMS page (port 2007)
+```
+
+```
+android_app/          Kotlin Views (Filters / Servers / Log)
+  SmsReceiver         match sender, then upload
   SmsUploader         GET {url}/health, POST {url}/sms/ingest
-  UpdateChecker       manual OTA via toolbar menu (manifest URL + APK install)
-test_server/          FastAPI + Postgres (+ /app/update.json, /releases/*.apk)
+  UpdateChecker       manual OTA (toolbar ☰)
 ```
 
-Use a **real device** for SMS. Emulators do not receive carrier messages.
+OTA files are served by the same API:
+
+| URL (port 2006) | Disk |
+|-----------------|------|
+| `GET /app/update.json` | `releases/companion/update.json` |
+| `GET /releases/{filename}` | `releases/companion/{filename}` |
+
+Use a **real phone**. Emulators do not receive carrier SMS.
+
+Gmail `sender_filters` on the server do **not** control which SMS the phone uploads. Phone filters live only in the Android app.
 
 ## Quick start
 
-1. **Start the test server** — see [test_server/README.md](test_server/README.md)
+1. **API** — from the repo root; see [../README.md](../README.md)
+
    ```bash
-   cd mobile_companion_app/test_server
-   cp .env.example .env          # Windows: copy .env.example .env
-   pip install -r requirements.txt
-   uvicorn main:app --host 0.0.0.0 --port 2005
+   python -m src.db.migrate
+   python main.py
    ```
-2. **Build and install the Android app** — see [android_app/README.md](android_app/README.md)
-   - Open `android_app/` in Android Studio
-   - **Build → Generate App Bundle(s) / APK(s) → Generate APK(s)**
-   - Install on a phone (Run ▶ over USB, or copy `app/build/outputs/apk/debug/app-debug.apk`)
-3. **Configure on the phone**
+
+   Listens on `0.0.0.0:2006`. Confirm `GET http://<lan-ip>:2006/health` → `{"status":"ok"}`.
+
+2. **Android app** — [android_app/README.md](android_app/README.md)
+
+   - Open `android_app/` in Android Studio (not the repo root)
+   - Run ▶ on a phone, or install `app/build/outputs/apk/debug/app-debug.apk`
+
+3. **On the phone**
+
    - Grant SMS permissions
-   - **Filters** → add a sender pattern (e.g. `HDFCBK`)
-   - **Servers** → add `http://<your-lan-ip>:2005`, mark Active, tap **Test**
+   - **Filters** → sender pattern, e.g. `HDFCBK`
+   - **Servers** → `http://<lan-ip>:2006` (no path, no trailing slash), mark **Active**, **Test**
+   - If `.env` has `SMS_INGEST_TOKEN`, enter the same value in the server dialog (header `X-TrackMySpend-Token`)
 
-Matching SMS are POSTed as JSON `{sender, body, received_at, device_id}`. Upload attempts appear on the **Log** tab (last 50).
+JSON posted: `{sender, body, received_at, device_id}`. Retries with the same fields are stored once (`content_hash`).
 
-### OTA updates (optional)
+Check:
 
-Manual only — no check on launch. Manifest URL is separate from SMS servers (LAN, Tailnet, or HTTPS).
+- Phone **Log** tab — last 50 upload attempts (URL + HTTP status)
+- Web UI **SMS** page — rows in `raw_sms_data`
+- Web UI **Logs** page — `sms.ingest_accepted` / `sms.ingest_duplicate`
 
-1. Toolbar **☰** → **Update manifest URL…** → e.g. `http://<lan-ip>:2005/app/update.json`
-2. **☰** → **Check for updates** — dialog only if `version_code` differs (upgrade or downgrade)
+If an older install still points at port **2005**, change the server URL to **2006**.
 
-Allow **Install unknown apps** for this companion when Android asks. New APKs must use the same signing key as the installed app.
+## OTA (optional)
 
-See [android_app/README.md](android_app/README.md) (phone) and [test_server/README.md](test_server/README.md) (publish APK + `releases/update.json`).
+Manual only. The app does not check on launch.
 
-## Docs
+1. Copy the APK to `releases/companion/` and edit `releases/companion/update.json`
+2. Phone ☰ → **Update manifest URL…** → `http://<reachable-ip>:2006/app/update.json`
+3. ☰ → **Check for updates** — dialog only if `version_code` differs
 
-| Component | README |
-|-----------|--------|
-| FastAPI ingest server | [test_server/README.md](test_server/README.md) |
-| Android companion app | [android_app/README.md](android_app/README.md) |
+Same signing key as the installed app. Allow **Install unknown apps** when Android asks.
+
+Details: [android_app/README.md](android_app/README.md).

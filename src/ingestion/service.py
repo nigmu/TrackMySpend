@@ -4,6 +4,7 @@ from ..accounts import db as accounts_db
 from ..core.config import BOOTSTRAP_MESSAGE_COUNT
 from ..core.logging import get_logger
 from ..filters.db import active_patterns
+from ..logs.db import insert_event_log
 from ..parsing.service import parse_pending
 from . import db
 from .gmail_client import (
@@ -63,10 +64,22 @@ def _bootstrap(conn: Connection, service, account_id: int, patterns: list[str]) 
 def sync_one(conn: Connection, account: dict, trigger: str) -> dict:
     account_id = account["id"]
     run_id = db.start_sync_run(conn, account_id, trigger)
+    insert_event_log(
+        "gmail.sync_started",
+        "ingestion",
+        f"Gmail sync started account_id={account_id} trigger={trigger}",
+        context={"account_id": account_id, "trigger": trigger, "run_id": run_id},
+    )
     patterns = active_patterns(conn)
     if not patterns:
         db.finish_sync_run(conn, run_id, "done", error_message="no sender filters")
         logger.info("sync skipped account_id=%s reason=no_filters", account_id)
+        insert_event_log(
+            "gmail.sync_completed",
+            "ingestion",
+            f"Gmail sync skipped account_id={account_id} reason=no_filters",
+            context={"account_id": account_id, "trigger": trigger},
+        )
         return {"account_id": account_id, "status": "no_filters"}
 
     try:
@@ -91,10 +104,23 @@ def sync_one(conn: Connection, account: dict, trigger: str) -> dict:
             "sync done account_id=%s trigger=%s seen=%s inserted=%s skipped=%s failed=%s",
             account_id, trigger, stats["seen"], stats["inserted"], stats["skipped"], stats["failed"],
         )
+        insert_event_log(
+            "gmail.sync_completed",
+            "ingestion",
+            f"Gmail sync done account_id={account_id}",
+            context={"account_id": account_id, "trigger": trigger, **stats},
+        )
         return {"account_id": account_id, "status": "done", **stats}
     except Exception as exc:
         db.finish_sync_run(conn, run_id, "failed", error_message=str(exc))
         logger.exception("sync failed account_id=%s", account_id)
+        insert_event_log(
+            "gmail.sync_failed",
+            "ingestion",
+            f"Gmail sync failed account_id={account_id}",
+            severity="error",
+            context={"account_id": account_id, "trigger": trigger, "error": str(exc)},
+        )
         return {"account_id": account_id, "status": "failed", "error": str(exc)}
 
 

@@ -44,7 +44,9 @@
     if (page === "accounts") loadAccounts();
     if (page === "filters") loadFilters();
     if (page === "mails") loadMails();
+    if (page === "sms") loadSms();
     if (page === "transactions") loadTransactions();
+    if (page === "logs") loadLogs();
   });
 
   const apiBaseInput = document.getElementById("api-base");
@@ -68,18 +70,22 @@
       const health = await api.health();
       statusEl.textContent = health.message || "API is up.";
       statusEl.classList.add("ok");
-      const [accounts, filters, mails, txns] = await Promise.all([
+      const [accounts, filters, mails, sms, txns, logs] = await Promise.all([
         api.listAccounts().catch(() => []),
         api.listFilters().catch(() => ({ count: 0 })),
         api.listMails().catch(() => ({ total: 0 })),
+        api.listSms().catch(() => ({ total: 0 })),
         api.listTransactions().catch(() => ({ total: 0 })),
+        api.listLogs().catch(() => ({ total: 0 })),
       ]);
       const accountCount = Array.isArray(accounts) ? accounts.length : 0;
       statsEl.innerHTML = `
         <div class="stat"><b>${accountCount}</b> accounts</div>
         <div class="stat"><b>${filters.count || 0}</b> filters</div>
         <div class="stat"><b>${mails.total || 0}</b> mails</div>
+        <div class="stat"><b>${sms.total || 0}</b> sms</div>
         <div class="stat"><b>${txns.total || 0}</b> transactions</div>
+        <div class="stat"><b>${logs.total || 0}</b> log events</div>
       `;
     } catch (err) {
       statusEl.textContent = "API unreachable: " + err.message;
@@ -231,6 +237,70 @@
                 <td>${m.subject || "—"}</td>
                 <td>${m.processing_status}</td>
                 <td>${m.matched_filter_rule || "—"}</td>
+              </tr>`
+            )
+            .join("")}
+        </tbody>
+      </table>`;
+    } catch (err) {
+      el.innerHTML = `<p class="err">${err.message}</p>`;
+    }
+  }
+
+  function snippet(text, max = 80) {
+    const value = String(text || "");
+    if (value.length <= max) return value || "—";
+    return value.slice(0, max) + "…";
+  }
+
+  async function loadSms() {
+    const el = document.getElementById("sms-table");
+    try {
+      const data = await api.listSms();
+      if (!data.sms.length) {
+        el.innerHTML = "<p class='muted'>No SMS ingested yet.</p>";
+        return;
+      }
+      el.innerHTML = `<table>
+        <thead><tr><th>When</th><th>From</th><th>Device</th><th>Status</th><th>Body</th></tr></thead>
+        <tbody>
+          ${data.sms
+            .map(
+              (s) => `<tr>
+                <td>${formatTs(s.received_at || s.created_at)}</td>
+                <td>${s.sender || "—"}</td>
+                <td>${s.device_id || "—"}</td>
+                <td>${s.processing_status}</td>
+                <td>${snippet(s.body)}</td>
+              </tr>`
+            )
+            .join("")}
+        </tbody>
+      </table>`;
+    } catch (err) {
+      el.innerHTML = `<p class="err">${err.message}</p>`;
+    }
+  }
+
+  async function loadLogs() {
+    const el = document.getElementById("logs-table");
+    try {
+      const data = await api.listLogs();
+      if (!data.logs.length) {
+        el.innerHTML = "<p class='muted'>No event logs yet.</p>";
+        return;
+      }
+      el.innerHTML = `<table>
+        <thead><tr><th>When</th><th>Severity</th><th>Source</th><th>Event</th><th>Message</th></tr></thead>
+        <tbody>
+          ${data.logs
+            .map(
+              (row) => `<tr>
+                <td>${formatTs(row.created_at)}</td>
+                <td class="${row.severity === "error" ? "err" : ""}">${row.severity}</td>
+                <td>${row.source}</td>
+                <td>${row.event_type}</td>
+                <td>${row.message}</td>
               </tr>`
             )
             .join("")}

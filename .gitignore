@@ -16,6 +16,9 @@ venv/
 .coverage*
 htmlcov/
 
+# Companion OTA APKs (keep update.json)
+releases/companion/*.apk
+
 # OS / editors
 .DS_Store
 .idea/

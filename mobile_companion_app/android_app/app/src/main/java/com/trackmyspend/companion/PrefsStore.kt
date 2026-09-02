@@ -15,6 +15,7 @@ data class ServerConfig(
     val id: String,
     val name: String,
     val url: String,
+    val token: String = "",
     val active: Boolean = false,
 )
 
@@ -23,6 +24,8 @@ data class UploadLogEntry(
     val sender: String,
     val success: Boolean,
     val message: String,
+    val serverUrl: String = "",
+    val httpCode: Int? = null,
 )
 
 class PrefsStore(context: Context) {
@@ -45,28 +48,31 @@ class PrefsStore(context: Context) {
 
     fun getServers(): List<ServerConfig> = parseServers(prefs.getString(KEY_SERVERS, "[]") ?: "[]")
 
-    fun addServer(name: String, url: String): ServerConfig {
+    fun addServer(name: String, url: String, token: String = ""): ServerConfig {
         val trimmedName = name.trim()
         val trimmedUrl = url.trim().trimEnd('/')
+        val trimmedToken = token.trim()
         require(trimmedName.isNotEmpty() && trimmedUrl.isNotEmpty()) { "Name and URL are required" }
         val servers = getServers()
         val server = ServerConfig(
             id = UUID.randomUUID().toString(),
             name = trimmedName,
             url = trimmedUrl,
+            token = trimmedToken,
             active = servers.isEmpty(),
         )
         saveServers(servers + server)
         return server
     }
 
-    fun updateServer(id: String, name: String, url: String) {
+    fun updateServer(id: String, name: String, url: String, token: String = "") {
         val trimmedName = name.trim()
         val trimmedUrl = url.trim().trimEnd('/')
+        val trimmedToken = token.trim()
         require(trimmedName.isNotEmpty() && trimmedUrl.isNotEmpty()) { "Name and URL are required" }
         saveServers(
             getServers().map {
-                if (it.id == id) it.copy(name = trimmedName, url = trimmedUrl) else it
+                if (it.id == id) it.copy(name = trimmedName, url = trimmedUrl, token = trimmedToken) else it
             }
         )
     }
@@ -165,6 +171,7 @@ class PrefsStore(context: Context) {
                             id = obj.getString("id"),
                             name = obj.getString("name"),
                             url = obj.getString("url"),
+                            token = obj.optString("token", ""),
                             active = obj.optBoolean("active", false),
                         )
                     )
@@ -180,6 +187,7 @@ class PrefsStore(context: Context) {
                         .put("id", server.id)
                         .put("name", server.name)
                         .put("url", server.url)
+                        .put("token", server.token)
                         .put("active", server.active)
                 )
             }
@@ -197,6 +205,12 @@ class PrefsStore(context: Context) {
                             sender = obj.getString("sender"),
                             success = obj.getBoolean("success"),
                             message = obj.getString("message"),
+                            serverUrl = obj.optString("serverUrl", ""),
+                            httpCode = if (obj.has("httpCode") && !obj.isNull("httpCode")) {
+                                obj.getInt("httpCode")
+                            } else {
+                                null
+                            },
                         )
                     )
                 }
@@ -212,6 +226,8 @@ class PrefsStore(context: Context) {
                         .put("sender", entry.sender)
                         .put("success", entry.success)
                         .put("message", entry.message)
+                        .put("serverUrl", entry.serverUrl)
+                        .put("httpCode", if (entry.httpCode != null) entry.httpCode else JSONObject.NULL)
                 )
             }
             return array.toString()

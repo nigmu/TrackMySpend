@@ -5,6 +5,7 @@ from psycopg import Connection
 from ..core.config import GMAIL_SCOPES, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
 from ..core.crypto import decrypt_text, encrypt_text
 from ..core.logging import get_logger
+from ..logs.db import insert_event_log
 from . import db
 from .oauth import authorization_url, exchange_code
 
@@ -28,6 +29,12 @@ def complete_connect(code: str, state: str, conn: Connection) -> dict:
         encrypt_text(creds.refresh_token),
     )
     logger.info("gmail connected email=%s account_id=%s", email, row["id"])
+    insert_event_log(
+        "gmail.connected",
+        "accounts",
+        f"Gmail connected {email}",
+        context={"email": email, "account_id": row["id"]},
+    )
     return {"status": "connected", "email": email, "account_id": row["id"]}
 
 
@@ -39,6 +46,12 @@ def remove_account(conn: Connection, account_id: int) -> bool:
     if not db.delete_account(conn, account_id):
         return False
     logger.info("account removed account_id=%s", account_id)
+    insert_event_log(
+        "gmail.removed",
+        "accounts",
+        f"Gmail account removed id={account_id}",
+        context={"account_id": account_id},
+    )
     return True
 
 

@@ -1,18 +1,19 @@
 from ..core.logging import configure_logging, get_logger
 from .connection import connect
-from .schema import SCHEMA_STATEMENTS
+from .schema import POST_SCHEMA_STATEMENTS, SCHEMA_STATEMENTS
 
 logger = get_logger(__name__)
 
 
 def migrate() -> None:
     conn = connect()
+    statements = [*POST_SCHEMA_STATEMENTS[:1], *SCHEMA_STATEMENTS, *POST_SCHEMA_STATEMENTS[1:]]
     try:
         with conn.cursor() as cur:
-            for stmt in SCHEMA_STATEMENTS:
+            for stmt in statements:
                 cur.execute(stmt)
         conn.commit()
-        logger.info("migrate complete (%s statements)", len(SCHEMA_STATEMENTS))
+        logger.info("migrate complete (%s statements)", len(statements))
     except Exception:
         conn.rollback()
         logger.exception("migrate failed")

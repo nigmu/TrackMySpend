@@ -2,6 +2,7 @@ from psycopg import Connection
 
 from ..core.config import PARSE_BATCH_LIMIT
 from ..core.logging import get_logger
+from ..logs.db import insert_event_log
 from .amount import parse_amount_paisa
 
 logger = get_logger(__name__)
@@ -61,6 +62,16 @@ def parse_pending(conn: Connection, limit: int = PARSE_BATCH_LIMIT) -> dict:
         done += 1
 
     logger.info("parse finished claimed=%s done=%s failed=%s", len(rows), done, failed)
+    if rows:
+        event_type = "parse.failed" if failed and not done else "parse.completed"
+        severity = "error" if failed and not done else "info"
+        insert_event_log(
+            event_type,
+            "parsing",
+            f"Parse claimed={len(rows)} done={done} failed={failed}",
+            severity=severity,
+            context={"claimed": len(rows), "done": done, "failed": failed},
+        )
     return {"claimed": len(rows), "done": done, "failed": failed}
 
 

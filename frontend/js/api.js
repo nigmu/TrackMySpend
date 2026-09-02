@@ -45,5 +45,7 @@ const api = {
   deleteFilter: (id) => apiFetch(`/filters/${id}`, { method: "DELETE" }),
   parse: () => apiFetch("/parse", { method: "POST" }),
   listMails: () => apiFetch("/mails"),
+  listSms: () => apiFetch("/sms"),
+  listLogs: () => apiFetch("/logs"),
   listTransactions: () => apiFetch("/transactions"),
 };

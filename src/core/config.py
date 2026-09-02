@@ -16,7 +16,12 @@ GOOGLE_REDIRECT_URI = os.environ.get(
 )
 ENCRYPTION_KEY = os.environ.get("ENCRYPTION_KEY", "")
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
+LOG_DIR = os.environ.get("LOG_DIR", "logs")
+LOG_FILE_MAX_BYTES = int(os.environ.get("LOG_FILE_MAX_BYTES", "2000000"))
+LOG_FILE_BACKUP_COUNT = int(os.environ.get("LOG_FILE_BACKUP_COUNT", "3"))
+LOG_JSON = os.environ.get("LOG_JSON", "false").lower() in ("1", "true", "yes")
 FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "http://localhost:2007")
+SMS_INGEST_TOKEN = os.environ.get("SMS_INGEST_TOKEN", "")
 
 GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 BOOTSTRAP_MESSAGE_COUNT = 50

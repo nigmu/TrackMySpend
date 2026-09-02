@@ -1,5 +1,5 @@
 [Unit]
-Description=TrackMySpend (API :2006, UI :2007, SMS :2005)
+Description=TrackMySpend (API :2006, UI :2007)
 Documentation=file:///home/nigam/projects/TrackMySpend/README.md
 After=network-online.target postgresql.service
 Wants=network-online.target

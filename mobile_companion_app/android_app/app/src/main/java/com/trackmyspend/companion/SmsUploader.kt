@@ -46,13 +46,15 @@ object SmsUploader {
             .put("device_id", deviceId)
             .toString()
 
-        val result = postJson("${server.url}/sms/ingest", payload)
+        val result = postJson("${server.url}/sms/ingest", payload, server.token)
         prefs.appendLog(
             UploadLogEntry(
                 timestamp = timestamp,
                 sender = senderSnippet(sender),
                 success = result.success,
                 message = result.message,
+                serverUrl = server.url,
+                httpCode = result.httpCode,
             )
         )
     }
@@ -75,19 +77,19 @@ object SmsUploader {
         }
     }
 
-    private fun postJson(urlString: String, json: String): UploadResult {
+    private fun postJson(urlString: String, json: String, token: String): UploadResult {
         return try {
-            val conn = openPost(urlString, json)
+            val conn = openPost(urlString, json, token)
             val code = conn.responseCode
             val body = readStream(if (code in 200..299) conn.inputStream else conn.errorStream)
             conn.disconnect()
             if (code in 200..299) {
-                UploadResult(true, body.ifBlank { "HTTP $code" })
+                UploadResult(true, body.ifBlank { "HTTP $code" }, code)
             } else {
-                UploadResult(false, "HTTP $code: ${body.ifBlank { "error" }}")
+                UploadResult(false, "HTTP $code: ${body.ifBlank { "error" }}", code)
             }
         } catch (e: Exception) {
-            UploadResult(false, e.message ?: e.javaClass.simpleName)
+            UploadResult(false, e.message ?: e.javaClass.simpleName, null)
         }
     }
 
@@ -99,13 +101,16 @@ object SmsUploader {
         return conn
     }
 
-    private fun openPost(urlString: String, json: String): HttpURLConnection {
+    private fun openPost(urlString: String, json: String, token: String): HttpURLConnection {
         val conn = URL(urlString).openConnection() as HttpURLConnection
         conn.requestMethod = "POST"
         conn.connectTimeout = 15_000
         conn.readTimeout = 15_000
         conn.doOutput = true
         conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+        if (token.isNotBlank()) {
+            conn.setRequestProperty("X-TrackMySpend-Token", token)
+        }
         OutputStreamWriter(conn.outputStream, Charsets.UTF_8).use { it.write(json) }
         return conn
     }
@@ -119,5 +124,5 @@ object SmsUploader {
         return if (sender.length <= 24) sender else sender.take(21) + "..."
     }
 
-    private data class UploadResult(val success: Boolean, val message: String)
+    private data class UploadResult(val success: Boolean, val message: String, val httpCode: Int?)
 }
