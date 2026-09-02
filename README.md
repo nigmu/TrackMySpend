@@ -1,143 +1,185 @@
 # TrackMySpend
 
-Two intentionally separate pipelines share one Postgres database and one API:
+TrackMySpend saves bank alerts from two places:
 
-- **Mail** (`src/mail/`) — Gmail bank alerts, fully wired: sync → parse → `transactions`.
-- **SMS** (`src/sms/`) — phone SMS, stored raw for now. **This is the priority direction for new work**: turning `raw_sms_data` into `transactions` (mirroring mail) is the next real feature, not yet built.
+1. **Gmail** — bank emails are synced, then parsed into amounts (rupees stored as paisa).
+2. **SMS** — the Android app sends matching texts to the server. They are stored as-is. They are **not** turned into amounts yet.
 
-They do not share code beyond generic utilities (`src/core/`) and the shared event log (`src/logs/`).
+Both use the same Postgres database and the same API.
+
+## Ports
+
+You run two things:
+
+| What | Port | How to start |
+|------|------|----------------|
+| API (Gmail, SMS ingest, app updates, health check) | 2006 | `python main.py` |
+| Web UI | 2007 | `python -m http.server 2007 --directory frontend` |
+
+Open the UI at http://localhost:2007  
+The API is at http://localhost:2006
+
+There is no extra SMS server. Do not use port 2005.
+
+## How data flows
+
+**Gmail**
+
+1. Connect a Gmail account in the UI.
+2. Add a sender filter (for example `hdfcbank.bank.in`). Only matching emails are kept.
+3. Sync runs every ~15 minutes, or when you click **Sync all**.
+4. Matching emails go into `raw_mail_data`.
+5. Parse turns those emails into `transactions` (amount only).
+
+**SMS**
+
+1. Install the Android companion app on a real phone.
+2. Add a sender filter on the phone (for example `HDFCBK`). These filters live on the phone, not in the web UI.
+3. Add the API URL, for example `http://192.168.1.63:2006`.
+4. Matching SMS are posted to `/sms/ingest` and stored in `raw_sms_data`.
+5. You can see them on the web **SMS** page. They are not parsed into transactions yet.
+
+## Folder layout
 
 ```
-email_accounts + sender_filters          Android companion (phone-local filters)
-        │                                         │
-     [sync]  poller ~15 min, or POST /sync        POST /sms/ingest
-        │    From must match a sender_filter      optional X-TrackMySpend-Token
-        ▼                                         ▼
-  raw_mail_data                              raw_sms_data
-        │                                         │
-     [parse]  auto after sync, or POST /parse      (no parser yet — planned next)
-        ▼
-  transactions (amount_paisa)
+src/mail/                         Gmail sync, parse, poller
+src/sms/                          SMS ingest
+src/accounts/                     Gmail login (OAuth)
+src/filters/                      Gmail sender filters (web UI)
+src/companion/                    Android app update files
+src/logs/                         Event log shown on the Logs page
+src/core/                         Config, logging, encryption, amount helper
+src/db/                           Database schema and migrate
+frontend/                         Web UI
+releases/companion/               Android APK + update.json
+mobile_companion_app/android_app/ Android app source
+bin/trackmyspend-run.sh           Starts API + UI together (Linux)
+deploy/TrackMySpend.service       systemd unit (Linux)
 ```
 
-Two processes, two ports:
+## Setup (first time)
 
-| Process | Port | What it is |
-|---------|------|------------|
-| FastAPI (`python main.py` / uvicorn `src.app:app`) | 2006 | Gmail, SMS ingest, companion OTA, `/health` |
-| Static UI (`python -m http.server --directory frontend`) | 2007 | Home, Accounts, Filters, Mail, SMS, Transactions, Logs |
+### 1. Database and env file
 
-There is no separate SMS server and no port 2005.
+Postgres must be running. Then:
 
-## Layout
-
-```
-src/                  FastAPI app
-  mail/               Gmail pipeline: gmail_client, db, service (sync), parse,
-                       poller, routes → /sync /mails /parse /transactions
-  sms/                SMS pipeline: db, routes → /sms/ingest /sms
-  accounts/           Gmail OAuth credentials (mail-only, not shared with sms)
-  filters/            Gmail sender_filters (mail-only; SMS filters live on the phone)
-  companion/          Android OTA: GET /app/update.json, GET /releases/*
-  logs/               app_event_logs, shared by mail + sms + companion
-  core/               config, file logging, request logging, crypto, amount parser
-  db/                 schema + migrate + connection
-frontend/             static UI (port 2007)
-releases/companion/   OTA manifest + APKs (served from port 2006)
-mobile_companion_app/android_app/   Kotlin client
-bin/trackmyspend-run.sh             API + UI together
-deploy/TrackMySpend.service         systemd unit
+```bash
+copy .env.example .env
 ```
 
-`src/mail/` and `src/sms/` are deliberately symmetric siblings — same shape (`db.py` + `routes.py` + domain logic), same shared dependencies (`core`, `logs`), no cross-imports between them.
+On Linux/macOS: `cp .env.example .env`
 
-## Setup
+### 2. Encryption key
 
-1. Postgres, then copy `.env.example` to `.env`.
-2. Generate `ENCRYPTION_KEY`:
+Paste the printed value into `.env` as `ENCRYPTION_KEY`:
 
-   ```bash
-   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-   ```
+```bash
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
 
-3. Google Cloud OAuth client (Gmail readonly). Redirect URI must match `GOOGLE_REDIRECT_URI`.
-4. Install, migrate, run API:
+### 3. Gmail (only if you want email alerts)
 
-   ```bash
-   pip install -e .
-   python -m src.db.migrate
-   python main.py
-   ```
+Create a Google Cloud OAuth client with Gmail **readonly**.
 
-   API: http://localhost:2006  
-   Health: http://localhost:2006/health → `{"status":"ok"}`
+Set in `.env`:
 
-5. Frontend:
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `GOOGLE_REDIRECT_URI` — must match Google Console exactly, usually  
+  `http://localhost:2006/auth/gmail/callback`
 
-   ```bash
-   python -m http.server 2007 --directory frontend
-   ```
+### 4. Install Python package and create tables
 
-   Open http://localhost:2007  
-   Sidebar **API base** defaults to `http://localhost:2006`. On another machine, set it to `http://<api-host>:2006`.
+```bash
+pip install -e .
+python -m src.db.migrate
+```
 
-After pulling schema changes on a deployed box, run `python -m src.db.migrate` again, then restart the service.
+### 5. Start the API
 
-## Environment
+```bash
+python main.py
+```
 
-Copy `.env.example`. Used values:
+Check it is up: open http://localhost:2006/health  
+You should see `{"status":"ok"}`.
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `DATABASE_URL` | `postgresql://postgres:postgres@127.0.0.1:5432/trackmyspend` | Postgres |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | empty | Gmail OAuth |
-| `GOOGLE_REDIRECT_URI` | `http://localhost:2006/auth/gmail/callback` | Must match the Google client |
-| `ENCRYPTION_KEY` | empty | Fernet key for OAuth tokens |
-| `FRONTEND_ORIGIN` | `http://localhost:2007` | CORS + OAuth return URL |
-| `SMS_INGEST_TOKEN` | empty | If set, `POST /sms/ingest` requires header `X-TrackMySpend-Token` |
-| `LOG_LEVEL` | `INFO` | File + console logs |
-| `LOG_DIR` | `logs` | Directory for `app.log` |
-| `LOG_JSON` | `false` | `true` writes JSON lines instead of text |
-| `LOG_FILE_MAX_BYTES` | `2000000` | Rotate size |
-| `LOG_FILE_BACKUP_COUNT` | `3` | Rotated files to keep |
+### 6. Start the web UI (second terminal)
 
-## Logging
+```bash
+python -m http.server 2007 --directory frontend
+```
 
-- **File / console:** request line (method, path, status, duration, client, request id) plus domain logs → `logs/app.log` (gitignored).
-- **UI Logs page:** product events in `app_event_logs` (Gmail connect/sync, parse, SMS ingest, companion manifest). Not every HTTP request.
+Open http://localhost:2007
 
-## APIs (port 2006)
+If the UI is on another machine, change **API base** in the sidebar to `http://<api-host>:2006`.
 
-- `GET /` — UI health probe
-- `GET /health` — Android **Test** button (`{"status":"ok"}`)
-- `GET /auth/gmail/connect` — start OAuth
-- `GET /accounts` / `DELETE /accounts/{id}`
-- `GET|POST /filters` / `DELETE /filters/{id}` — Gmail sender filters
-- `POST /sync` / `POST /sync/{account_id}`
-- `POST /parse`
-- `GET /mails` / `GET /transactions`
-- `POST /sms/ingest` — `{sender?, body, received_at?, device_id?}`; duplicates skipped via `content_hash`
-- `GET /sms`
-- `GET /logs`
-- `GET /app/update.json`
-- `GET /releases/{filename}` — files from `releases/companion/`
+After you pull code that changes the database, run `python -m src.db.migrate` again, then restart the API.
 
-Self-checks:
+## `.env` settings
+
+| Name | What it does |
+|------|----------------|
+| `DATABASE_URL` | Postgres connection string |
+| `GOOGLE_CLIENT_ID` | Gmail OAuth |
+| `GOOGLE_CLIENT_SECRET` | Gmail OAuth |
+| `GOOGLE_REDIRECT_URI` | Must match the Google Cloud client |
+| `ENCRYPTION_KEY` | Encrypts Gmail tokens in the database |
+| `FRONTEND_ORIGIN` | Web UI origin (CORS + after Google login) |
+| `SMS_INGEST_TOKEN` | Optional. If set, the phone must send the same value as header `X-TrackMySpend-Token` |
+| `LOG_LEVEL` | Log verbosity (`INFO` is fine) |
+| `LOG_DIR` | Folder for `app.log` |
+| `LOG_JSON` | `true` = JSON log lines |
+| `LOG_FILE_MAX_BYTES` | Rotate log file after this size |
+| `LOG_FILE_BACKUP_COUNT` | How many old log files to keep |
+
+## Web UI pages
+
+| Page | What you see |
+|------|----------------|
+| Home | Whether the API is up, plus counts |
+| Accounts | Connected Gmail accounts; Sync / Parse |
+| Filters | Gmail sender patterns (emails only) |
+| Mail | Raw bank emails |
+| SMS | Raw SMS from the phone |
+| Transactions | Amounts parsed from **Gmail only** |
+| Logs | Important events (sync, SMS ingest, etc.) |
+
+Server logs also go to `logs/app.log`.
+
+## API (port 2006)
+
+Useful endpoints:
+
+- `GET /health` — phone **Test** button uses this
+- `GET /auth/gmail/connect` — start Gmail login
+- `GET /accounts` — list accounts
+- `DELETE /accounts/{id}` — remove an account
+- `GET /filters` / `POST /filters` / `DELETE /filters/{id}` — Gmail filters
+- `POST /sync` — sync all Gmail accounts
+- `POST /sync/{account_id}` — sync one account
+- `POST /parse` — parse pending emails into transactions
+- `GET /mails` — raw emails
+- `GET /transactions` — parsed amounts (from email)
+- `POST /sms/ingest` — body: `sender`, `body` (required), `received_at`, `device_id`
+- `GET /sms` — raw SMS
+- `GET /logs` — event log
+- `GET /app/update.json` — Android update info
+- `GET /releases/{filename}` — APK files from `releases/companion/`
+
+## Checks
+
+Quick sanity checks (no database needed for the amount one):
 
 ```bash
 python -m src.core.amount
 python -m src.sms.db
-```
-
-Unit tests (pure logic only — no DB required):
-
-```bash
 python -m unittest discover -s tests -v
 ```
 
-## Linux (systemd)
+## Linux (always-on with systemd)
 
-API **2006** and UI **2007** start together via `deploy/TrackMySpend.service` and `bin/trackmyspend-run.sh`:
+This starts both the API (2006) and the UI (2007):
 
 ```bash
 chmod +x bin/trackmyspend-run.sh
@@ -146,15 +188,18 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now TrackMySpend.service
 ```
 
-Set `FRONTEND_ORIGIN` and `GOOGLE_REDIRECT_URI` in `.env` to the host and these ports. After code or schema updates on the box:
+In `.env` on that machine, set `FRONTEND_ORIGIN` and `GOOGLE_REDIRECT_URI` to the real host and ports.
+
+After code or database changes:
 
 ```bash
 python -m src.db.migrate
 sudo systemctl restart TrackMySpend
 ```
 
-## SMS companion
+## Android companion
 
-Phone SMS → Android app → `POST /sms/ingest` on **2006**. Phone sender filters are local to the app; they are not the Gmail `sender_filters` on the server. OTA is manual (toolbar ☰).
+The phone app sends SMS to this API on port **2006**.
 
-See [`mobile_companion_app/README.md`](mobile_companion_app/README.md).
+Setup: [mobile_companion_app/README.md](mobile_companion_app/README.md)  
+Build/install: [mobile_companion_app/android_app/README.md](mobile_companion_app/android_app/README.md)
