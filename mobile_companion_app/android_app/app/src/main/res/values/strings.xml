@@ -20,4 +20,20 @@
     <string name="no_logs">No upload attempts yet.</string>
     <string name="permission_rationale">SMS permission is required to forward matching messages to your server.</string>
     <string name="permission_denied">SMS permission denied. The app cannot forward messages.</string>
+    <string name="menu_check_updates">Check for updates</string>
+    <string name="menu_update_manifest_url">Update manifest URL…</string>
+    <string name="update_manifest_url_title">Update manifest URL</string>
+    <string name="update_manifest_url_hint">Manifest URL (e.g. http://192.168.1.63:9000/app/update.json)</string>
+    <string name="update_manifest_url_saved">Manifest URL saved</string>
+    <string name="update_manifest_url_not_set">Set update manifest URL first</string>
+    <string name="update_up_to_date">Up to date (v%1$s)</string>
+    <string name="update_checking">Checking for updates…</string>
+    <string name="update_downloading">Downloading…</string>
+    <string name="update_available_title">Update available</string>
+    <string name="update_downgrade_title">Downgrade available</string>
+    <string name="update_dialog_body">Installed: v%1$s (%2$d)\nAvailable: v%3$s (%4$d)</string>
+    <string name="update_changelog">Changes:\n%1$s</string>
+    <string name="update_downgrade_warning">Android may block installing an older version without uninstalling the current app first.</string>
+    <string name="update_confirm">Update</string>
+    <string name="update_confirm_downgrade">Downgrade</string>
 </resources>

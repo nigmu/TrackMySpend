@@ -51,3 +51,7 @@ email_accounts + sender_filters
 - `GET /mails` / `GET /transactions`
 
 Parser self-check: `python -m src.parsing.amount`
+
+## SMS companion (optional)
+
+Phone SMS → Android companion → `POST /sms/ingest`. In-app OTA is manual (toolbar ☰). See [`mobile_companion_app/README.md`](mobile_companion_app/README.md).

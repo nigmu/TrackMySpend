@@ -100,6 +100,16 @@ class PrefsStore(context: Context) {
         prefs.edit().putString(KEY_LOG, logToJson(updated)).apply()
     }
 
+    fun getUpdateManifestUrl(): String? {
+        val url = prefs.getString(KEY_UPDATE_MANIFEST_URL, null)?.trim().orEmpty()
+        return url.ifEmpty { null }
+    }
+
+    fun setUpdateManifestUrl(url: String) {
+        val trimmed = url.trim()
+        prefs.edit().putString(KEY_UPDATE_MANIFEST_URL, trimmed).apply()
+    }
+
     private fun saveFilters(filters: List<SenderFilter>) {
         prefs.edit().putString(KEY_FILTERS, filtersToJson(filters)).apply()
     }
@@ -113,6 +123,7 @@ class PrefsStore(context: Context) {
         private const val KEY_FILTERS = "sender_filters"
         private const val KEY_SERVERS = "servers"
         private const val KEY_LOG = "upload_log"
+        private const val KEY_UPDATE_MANIFEST_URL = "update_manifest_url"
         private const val MAX_LOG_ENTRIES = 50
 
         private fun parseFilters(json: String): List<SenderFilter> {

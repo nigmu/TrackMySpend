@@ -6,7 +6,8 @@ Phone SMS → FastAPI `POST /sms/ingest` → Postgres `raw_sms`.
 android_app/          Kotlin Views app (Filters / Servers / Log)
   SmsReceiver         matches sender filters, then uploads
   SmsUploader         GET {url}/health, POST {url}/sms/ingest
-test_server/          FastAPI + Postgres
+  UpdateChecker       manual OTA via toolbar menu (manifest URL + APK install)
+test_server/          FastAPI + Postgres (+ /app/update.json, /releases/*.apk)
 ```
 
 Use a **real device** for SMS. Emulators do not receive carrier messages.
@@ -30,6 +31,17 @@ Use a **real device** for SMS. Emulators do not receive carrier messages.
    - **Servers** → add `http://<your-lan-ip>:9000`, mark Active, tap **Test**
 
 Matching SMS are POSTed as JSON `{sender, body, received_at, device_id}`. Upload attempts appear on the **Log** tab (last 50).
+
+### OTA updates (optional)
+
+Manual only — no check on launch. Manifest URL is separate from SMS servers (LAN, Tailnet, or HTTPS).
+
+1. Toolbar **☰** → **Update manifest URL…** → e.g. `http://<lan-ip>:9000/app/update.json`
+2. **☰** → **Check for updates** — dialog only if `version_code` differs (upgrade or downgrade)
+
+Allow **Install unknown apps** for this companion when Android asks. New APKs must use the same signing key as the installed app.
+
+See [android_app/README.md](android_app/README.md) (phone) and [test_server/README.md](test_server/README.md) (publish APK + `releases/update.json`).
 
 ## Docs
 

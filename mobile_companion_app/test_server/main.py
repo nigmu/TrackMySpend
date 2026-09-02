@@ -1,15 +1,23 @@
+import json
 from contextlib import asynccontextmanager
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from db import init_schema, insert_sms
 
+RELEASES_DIR = Path(__file__).parent / "releases"
+UPDATE_JSON = RELEASES_DIR / "update.json"
+RELEASES_DIR.mkdir(exist_ok=True)
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    RELEASES_DIR.mkdir(exist_ok=True)
     init_schema()
     yield
 
@@ -23,6 +31,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.mount("/releases", StaticFiles(directory=RELEASES_DIR), name="releases")
+
 
 class SmsIngestRequest(BaseModel):
     sender: str | None = None
@@ -34,6 +44,18 @@ class SmsIngestRequest(BaseModel):
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/app/update.json")
+def app_update():
+    if not UPDATE_JSON.is_file():
+        return {
+            "version_code": 1,
+            "version_name": "1.0",
+            "apk_url": "",
+            "changelog": "",
+        }
+    return json.loads(UPDATE_JSON.read_text(encoding="utf-8"))
 
 
 @app.post("/sms/ingest")

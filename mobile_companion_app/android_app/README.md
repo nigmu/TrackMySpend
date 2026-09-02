@@ -70,6 +70,32 @@ Copy `app-debug.apk` to the phone and open it to install.
 
 Cleartext HTTP is allowed (`usesCleartextTraffic`) so LAN URLs like `http://192.168.x.x:9000` work without HTTPS.
 
+## OTA updates
+
+Manual only. The app never checks on launch and never pops a dialog unless you tap **Check for updates** and the manifest `version_code` is different from the installed app.
+
+Toolbar **☰** (left of the title) — independent of SMS server config:
+
+| Menu item | What it does |
+|-----------|----------------|
+| **Update manifest URL…** | Full URL to a JSON manifest. LAN, Tailnet, or HTTPS. Empty URL is allowed (clears the saved value). |
+| **Check for updates** | Fetches that URL. Same `version_code` → Snackbar "Up to date". Different → dialog (optional `changelog`) with **Update** or **Downgrade**, then download + system installer. |
+
+If the URL is not set, **Check for updates** shows "Set update manifest URL first".
+
+Examples:
+
+```
+http://192.168.1.63:9000/app/update.json
+http://100.x.x.x:9000/app/update.json
+```
+
+The first time the installer runs, Android asks to allow **Install unknown apps** for this companion (`REQUEST_INSTALL_PACKAGES`). Allow it or install will not proceed.
+
+The APK must be signed with the **same key** as the installed app (debug keystore to debug, or the same release key). Android may refuse a lower `version_code` unless you uninstall first.
+
+See `../test_server/README.md` to host `update.json` and APKs.
+
 ## Troubleshooting
 
 | Problem | Fix |
@@ -78,5 +104,9 @@ Cleartext HTTP is allowed (`usesCleartextTraffic`) so LAN URLs like `http://192.
 | Test connection fails | Phone and server must be on the same LAN; server must bind `0.0.0.0`, not `127.0.0.1` |
 | SMS not forwarded | Check Filters pattern; confirm SMS permissions are granted |
 | No device in Run dropdown | Enable USB debugging; install phone USB drivers if needed |
+| "Set update manifest URL first" | ☰ → **Update manifest URL…** |
+| Installer does not open | Allow **Install unknown apps** for this app |
+| APK download fails | `apk_url` in the manifest must use a host the phone can reach (same IP as the manifest URL) |
+| "App not installed" after OTA | Signing key mismatch, or downgrade blocked — uninstall first |
 
 See `../test_server/README.md` for starting the backend.
