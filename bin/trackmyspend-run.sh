@@ -9,6 +9,9 @@ cd "$ROOT"
 # ponytail: if any child exits, kill all and let systemd Restart= bring the stack back
 trap 'kill 0' EXIT INT TERM
 
+# Write frontend/js/env.js from PUBLIC_HOST before UI starts
+"${VENV}/python" -c "from src.core.config import write_frontend_env; write_frontend_env()"
+
 # Main API (port 2006) — Gmail, SMS ingest, companion OTA
 "${VENV}/uvicorn" src.app:app \
   --host 0.0.0.0 --port 2006 \

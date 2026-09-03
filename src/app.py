@@ -46,13 +46,10 @@ app = FastAPI(
 )
 
 app.add_middleware(RequestLogMiddleware)
+_cors_origins = {FRONTEND_ORIGIN, "http://localhost:2007", "http://127.0.0.1:2007"}
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        FRONTEND_ORIGIN,
-        "http://localhost:2007",
-        "http://127.0.0.1:2007",
-    ],
+    allow_origins=sorted(_cors_origins),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

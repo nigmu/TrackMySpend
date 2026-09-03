@@ -1,5 +1,6 @@
 .env
 /logs/
+frontend/js/env.js
 graphify-out/
 .cursor/
 

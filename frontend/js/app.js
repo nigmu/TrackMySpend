@@ -50,10 +50,8 @@
   });
 
   const apiBaseInput = document.getElementById("api-base");
-  const savedBase = localStorage.getItem(CONFIG.API_BASE_KEY);
-  if (savedBase) apiBaseInput.value = savedBase;
+  apiBaseInput.value = CONFIG.DEFAULT_API_BASE;
   apiBaseInput.addEventListener("change", () => {
-    saveApiBase(apiBaseInput.value);
     refreshHome();
   });
 

@@ -113,8 +113,8 @@ Set in `.env`:
 
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
-- `GOOGLE_REDIRECT_URI` — must match Google Console exactly, usually  
-  `http://localhost:2006/auth/gmail/callback`
+- `PUBLIC_HOST` — host/IP clients use (no scheme/port). Local: `localhost`.  
+  Google Console redirect must be `http://<PUBLIC_HOST>:2006/auth/gmail/callback`
 
 ### 4. Install Python packages, encryption key, and tables
 
@@ -159,7 +159,7 @@ python -m http.server 2007 --directory frontend
 
 Open http://localhost:2007
 
-If the UI is on another machine, change **API base** in the sidebar to `http://<api-host>:2006`.
+API base in the UI comes from `PUBLIC_HOST` in `.env` (written to `frontend/js/env.js` when the API starts).
 
 ### 7. Log in with Gmail
 
@@ -181,9 +181,8 @@ After you pull code that changes the database, activate `.venv`, run `python -m 
 | `DATABASE_URL` | Postgres connection string |
 | `GOOGLE_CLIENT_ID` | Gmail OAuth |
 | `GOOGLE_CLIENT_SECRET` | Gmail OAuth |
-| `GOOGLE_REDIRECT_URI` | Must match the Google Cloud client |
+| `PUBLIC_HOST` | Host/IP for API, UI, and Google redirect (no scheme/port) |
 | `ENCRYPTION_KEY` | Encrypts Gmail tokens in the database |
-| `FRONTEND_ORIGIN` | Web UI origin (CORS + after Google login) |
 | `SMS_INGEST_TOKEN` | Optional. If set, the phone must send the same value as header `X-TrackMySpend-Token` |
 | `LOG_LEVEL` | Log verbosity (`INFO` is fine) |
 | `LOG_DIR` | Folder for `app.log` |
@@ -246,7 +245,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now TrackMySpend.service
 ```
 
-In `.env` on that machine, set `FRONTEND_ORIGIN` and `GOOGLE_REDIRECT_URI` to the real host and ports.
+In `.env` on that machine, set `PUBLIC_HOST` to the LAN IP or hostname clients use (e.g. `192.168.1.63`). Match Google Console redirect to `http://<PUBLIC_HOST>:2006/auth/gmail/callback`.
 
 After code or database changes:
 

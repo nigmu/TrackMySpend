@@ -1,11 +1,6 @@
 function getApiBase() {
-  return (
-    localStorage.getItem(CONFIG.API_BASE_KEY) || CONFIG.DEFAULT_API_BASE
-  ).replace(/\/$/, "");
-}
-
-function saveApiBase(value) {
-  localStorage.setItem(CONFIG.API_BASE_KEY, value.replace(/\/$/, ""));
+  const input = document.getElementById("api-base");
+  return (input?.value || CONFIG.DEFAULT_API_BASE).replace(/\/$/, "");
 }
 
 async function apiFetch(path, options = {}) {
