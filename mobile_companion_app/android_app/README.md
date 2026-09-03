@@ -18,7 +18,9 @@ If the phone still has a server URL with port **2005**, change it to **2006**.
 ## What you need
 
 - [Android Studio](https://developer.android.com/studio)
-- JDK **17** — **File → Settings → Build, Execution, Deployment → Build Tools → Gradle → Gradle JDK**
+- JDK **17** — set Gradle JDK in Android Studio settings  
+  **Linux / Windows:** **File → Settings → Build, Execution, Deployment → Build Tools → Gradle → Gradle JDK**  
+  **macOS:** **Android Studio → Settings** (or **Preferences**), then the same Gradle JDK path
 - Android SDK **34** — **Tools → SDK Manager → SDK Platforms**
 
 ## Open the project
@@ -30,7 +32,7 @@ If the phone still has a server URL with port **2005**, change it to **2006**.
 
 ## Build an APK
 
-**In Android Studio**
+**In Android Studio** (Linux, macOS, and Windows)
 
 1. **Build → Generate App Bundle(s) / APK(s) → Generate APK(s)**
 2. Click **locate** when the notification appears.
@@ -41,7 +43,16 @@ The file is:
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-**On Windows command line**
+**Command line — Linux** (from the repo root)
+
+```bash
+cd mobile_companion_app/android_app
+./gradlew assembleDebug
+```
+
+**macOS** — same as Linux.
+
+**Windows** (PowerShell, from the repo root)
 
 ```powershell
 cd mobile_companion_app\android_app
@@ -104,9 +115,36 @@ The new APK must be signed with the **same key** as the app already on the phone
 ### How to publish a new APK
 
 1. Increase `versionCode` and `versionName` in `app/build.gradle.kts`.
-2. Build: `.\gradlew.bat assembleDebug` (or release). Use the same signing key as the installed app.
+2. Build with Gradle. Use the same signing key as the installed app.
+
+   **Linux** and **macOS** (from `mobile_companion_app/android_app`):
+
+   ```bash
+   ./gradlew assembleDebug
+   ```
+
+   Or `./gradlew assembleRelease` for a release build.
+
+   **Windows** (PowerShell):
+
+   ```powershell
+   .\gradlew.bat assembleDebug
+   ```
+
 3. Copy the APK to `releases/companion/` and name it something like `companion-1.1.apk`  
    APK files are not committed to git.
+
+   **Linux** and **macOS** example:
+
+   ```bash
+   cp app/build/outputs/apk/debug/app-debug.apk ../../releases/companion/companion-1.1.apk
+   ```
+
+   **Windows** (PowerShell):
+
+   ```powershell
+   copy app\build\outputs\apk\debug\app-debug.apk ..\..\releases\companion\companion-1.1.apk
+   ```
 4. Edit `releases/companion/update.json`:
 
    ```json

@@ -18,11 +18,24 @@ If the same message is sent twice, the server keeps one row.
 
 ## Start here
 
+Activate the TrackMySpend venv first (see [../README.md](../README.md)). Commands are **Linux first**; **macOS** is the same; **Windows** is noted if it differs.
+
 ### 1. Run the TrackMySpend API
 
-From the **repo root** (see [../README.md](../README.md)):
+From the **repo root**:
+
+**Linux** and **macOS**
 
 ```bash
+source .venv/bin/activate
+python -m src.db.migrate
+python main.py
+```
+
+**Windows** (PowerShell)
+
+```powershell
+.\.venv\Scripts\Activate.ps1
 python -m src.db.migrate
 python main.py
 ```

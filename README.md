@@ -19,6 +19,8 @@ You run two things:
 Open the UI at http://localhost:2007  
 The API is at http://localhost:2006
 
+Commands below are **Linux first**. **macOS** uses the same commands unless a note says otherwise. **Windows** uses PowerShell where the command is different.
+
 There is no extra SMS server. Do not use port 2005.
 
 ## How data flows
@@ -59,25 +61,51 @@ deploy/TrackMySpend.service       systemd unit (Linux)
 
 ## Setup (first time)
 
-### 1. Database and env file
+Stay in the project folder for every command. After step 1, keep the venv **activated** in each terminal you use (**Linux** / **macOS** / **Windows**).
 
-Postgres must be running. Then:
+### 1. Create a virtual environment and turn it on
+
+**Linux**
 
 ```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+**macOS** — same as Linux.
+
+**Windows** (PowerShell)
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
+
+If PowerShell blocks the script, run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once, then try activate again.
+
+Your prompt should show `(.venv)`. The Linux systemd unit expects this folder to be named `.venv`.
+
+On Linux and macOS, after activate, use `python` and `pip` (not `python3`). On Windows, use `python` and `pip` from the venv as well.
+
+### 2. Database and env file
+
+Postgres must be running. Then copy the example env file.
+
+**Linux** and **macOS**
+
+```bash
+cp .env.example .env
+```
+
+**Windows** (PowerShell)
+
+```powershell
 copy .env.example .env
 ```
 
-On Linux/macOS: `cp .env.example .env`
+Edit `.env` and set `DATABASE_URL` to your Postgres user, password, and database name.
 
-### 2. Encryption key
-
-Paste the printed value into `.env` as `ENCRYPTION_KEY`:
-
-```bash
-python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-```
-
-### 3. Gmail (only if you want email alerts)
+### 3. Gmail OAuth (only if you want email alerts)
 
 Create a Google Cloud OAuth client with Gmail **readonly**.
 
@@ -88,14 +116,29 @@ Set in `.env`:
 - `GOOGLE_REDIRECT_URI` — must match Google Console exactly, usually  
   `http://localhost:2006/auth/gmail/callback`
 
-### 4. Install Python package and create tables
+### 4. Install Python packages, encryption key, and tables
+
+**Linux**, **macOS**, and **Windows** (venv must be on):
 
 ```bash
 pip install -e .
+```
+
+Print a key and paste it into `.env` as `ENCRYPTION_KEY`:
+
+```bash
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+Then create the tables:
+
+```bash
 python -m src.db.migrate
 ```
 
 ### 5. Start the API
+
+**Linux**, **macOS**, and **Windows** (venv on):
 
 ```bash
 python main.py
@@ -106,6 +149,10 @@ You should see `{"status":"ok"}`.
 
 ### 6. Start the web UI (second terminal)
 
+Activate the venv in this terminal too (Linux/macOS: `source .venv/bin/activate` — Windows: `.\.venv\Scripts\Activate.ps1`), then:
+
+**Linux**, **macOS**, and **Windows**
+
 ```bash
 python -m http.server 2007 --directory frontend
 ```
@@ -114,7 +161,18 @@ Open http://localhost:2007
 
 If the UI is on another machine, change **API base** in the sidebar to `http://<api-host>:2006`.
 
-After you pull code that changes the database, run `python -m src.db.migrate` again, then restart the API.
+### 7. Log in with Gmail
+
+1. In the web UI, open **Accounts**.
+2. Click **Connect Gmail**.
+3. Sign in with the Google account that receives bank emails, and allow access.
+4. You should return to the UI with that account listed.
+5. On **Filters**, add a bank sender pattern (for example `hdfcbank.bank.in`).
+6. Click **Sync all**, then **Parse pending**, to pull mail and fill **Transactions**.
+
+Without this login, Gmail sync will not run. SMS from the phone does not use Google login.
+
+After you pull code that changes the database, activate `.venv`, run `python -m src.db.migrate` again, then restart the API.
 
 ## `.env` settings
 
@@ -169,7 +227,7 @@ Useful endpoints:
 
 ## Checks
 
-Quick sanity checks (no database needed for the amount one):
+Quick sanity checks (venv on; no database needed for the amount one). Same on **Linux**, **macOS**, and **Windows**:
 
 ```bash
 python -m src.core.amount
@@ -177,9 +235,9 @@ python -m src.sms.db
 python -m unittest discover -s tests -v
 ```
 
-## Linux (always-on with systemd)
+## Always-on server (Linux systemd)
 
-This starts both the API (2006) and the UI (2007):
+This is **Linux only** (systemd). It starts both the API (2006) and the UI (2007). Create `.venv` and install the app first (setup steps above).
 
 ```bash
 chmod +x bin/trackmyspend-run.sh
@@ -193,9 +251,12 @@ In `.env` on that machine, set `FRONTEND_ORIGIN` and `GOOGLE_REDIRECT_URI` to th
 After code or database changes:
 
 ```bash
+source .venv/bin/activate
 python -m src.db.migrate
 sudo systemctl restart TrackMySpend
 ```
+
+On **macOS** or **Windows**, there is no systemd unit here — keep `python main.py` and the UI server running yourself (two terminals), or use another process manager.
 
 ## Android companion
 
