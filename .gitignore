@@ -3,7 +3,8 @@
 frontend/js/env.js
 graphify-out/
 .cursor/
-
+trackmyspend-run.sh
+TrackMySpend.service
 
 # Python
 __pycache__/
