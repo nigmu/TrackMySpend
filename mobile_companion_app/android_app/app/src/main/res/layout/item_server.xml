@@ -18,11 +18,13 @@
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
-            <RadioButton
-                android:id="@+id/activeRadio"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:contentDescription="@string/active" />
+            <TextView
+                android:id="@+id/priorityText"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:gravity="center"
+                android:textAppearance="?attr/textAppearanceTitleMedium"
+                android:textStyle="bold" />
 
             <LinearLayout
                 android:layout_width="0dp"
@@ -50,6 +52,22 @@
             android:layout_height="wrap_content"
             android:gravity="end"
             android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/moveUpButton"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:contentDescription="@string/move_server_up"
+                android:text="@string/move_up" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/moveDownButton"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:contentDescription="@string/move_server_down"
+                android:text="@string/move_down" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/testButton"

@@ -3,6 +3,7 @@ package com.trackmyspend.companion
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.view.View
 import android.widget.PopupMenu
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -22,11 +23,8 @@ class MainActivity : AppCompatActivity() {
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { results ->
-        val granted = SMS_PERMISSIONS.all { results[it] == true }
-        if (!granted) {
-            Snackbar.make(binding.root, R.string.permission_denied, Snackbar.LENGTH_LONG).show()
-        }
+    ) {
+        updatePermissionBanner()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -34,9 +32,11 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         prefs = PrefsStore(this)
+        if (BuildConfig.DEBUG) ReliabilitySelfCheck.run()
 
         setSupportActionBar(binding.toolbar)
         binding.toolbar.setNavigationOnClickListener { showToolbarMenu() }
+        binding.grantPermissionButton.setOnClickListener { requestSmsPermissionsIfNeeded() }
 
         val adapter = MainPagerAdapter(this)
         binding.viewPager.adapter = adapter
@@ -49,6 +49,12 @@ class MainActivity : AppCompatActivity() {
         }.attach()
 
         requestSmsPermissionsIfNeeded()
+        UploadWorker.enqueueAllPending(this)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        updatePermissionBanner()
     }
 
     private fun showToolbarMenu() {
@@ -188,6 +194,14 @@ class MainActivity : AppCompatActivity() {
         if (missing.isNotEmpty()) {
             permissionLauncher.launch(missing.toTypedArray())
         }
+        updatePermissionBanner()
+    }
+
+    private fun updatePermissionBanner() {
+        val granted = SMS_PERMISSIONS.all {
+            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+        }
+        binding.permissionBanner.visibility = if (granted) View.GONE else View.VISIBLE
     }
 
     companion object {

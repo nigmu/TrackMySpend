@@ -31,8 +31,8 @@ class ServersFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         prefs = PrefsStore(requireContext())
         adapter = ServerAdapter(
-            onSetActive = { server ->
-                prefs.setActiveServer(server.id)
+            onMove = { server, offset ->
+                prefs.moveServer(server.id, offset)
                 refreshList()
             },
             onEdit = { server -> showEditDialog(server) },
@@ -56,10 +56,15 @@ class ServersFragment : Fragment() {
     private fun refreshList() {
         val servers = prefs.getServers()
         adapter.submit(servers)
+        binding.fabAdd.isEnabled = servers.size < PrefsStore.MAX_SERVERS
         binding.emptyView.visibility = if (servers.isEmpty()) View.VISIBLE else View.GONE
     }
 
     private fun showAddDialog() {
+        if (prefs.getServers().size >= PrefsStore.MAX_SERVERS) {
+            Snackbar.make(binding.root, R.string.server_limit_reached, Snackbar.LENGTH_LONG).show()
+            return
+        }
         showServerDialog(null)
     }
 
@@ -111,7 +116,7 @@ class ServersFragment : Fragment() {
     }
 
     private class ServerAdapter(
-        private val onSetActive: (ServerConfig) -> Unit,
+        private val onMove: (ServerConfig, Int) -> Unit,
         private val onEdit: (ServerConfig) -> Unit,
         private val onDelete: (ServerConfig) -> Unit,
         private val onTest: (ServerConfig) -> Unit,
@@ -139,10 +144,14 @@ class ServersFragment : Fragment() {
             androidx.recyclerview.widget.RecyclerView.ViewHolder(itemBinding.root) {
 
             fun bind(server: ServerConfig) {
+                val position = bindingAdapterPosition
                 itemBinding.nameText.text = server.name
                 itemBinding.urlText.text = server.url
-                itemBinding.activeRadio.isChecked = server.active
-                itemBinding.activeRadio.setOnClickListener { onSetActive(server) }
+                itemBinding.priorityText.text = server.priority.toString()
+                itemBinding.moveUpButton.isEnabled = position > 0
+                itemBinding.moveDownButton.isEnabled = position in 0 until items.lastIndex
+                itemBinding.moveUpButton.setOnClickListener { onMove(server, -1) }
+                itemBinding.moveDownButton.setOnClickListener { onMove(server, 1) }
                 itemBinding.testButton.setOnClickListener { onTest(server) }
                 itemBinding.editButton.setOnClickListener { onEdit(server) }
                 itemBinding.deleteButton.setOnClickListener { onDelete(server) }

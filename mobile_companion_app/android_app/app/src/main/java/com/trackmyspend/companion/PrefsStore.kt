@@ -16,16 +16,7 @@ data class ServerConfig(
     val name: String,
     val url: String,
     val token: String = "",
-    val active: Boolean = false,
-)
-
-data class UploadLogEntry(
-    val timestamp: String,
-    val sender: String,
-    val success: Boolean,
-    val message: String,
-    val serverUrl: String = "",
-    val httpCode: Int? = null,
+    val priority: Int,
 )
 
 class PrefsStore(context: Context) {
@@ -46,7 +37,15 @@ class PrefsStore(context: Context) {
         saveFilters(getFilters().filterNot { it.id == id })
     }
 
-    fun getServers(): List<ServerConfig> = parseServers(prefs.getString(KEY_SERVERS, "[]") ?: "[]")
+    fun getServers(): List<ServerConfig> {
+        val json = prefs.getString(KEY_SERVERS, "[]") ?: "[]"
+        val servers = parseServers(json)
+        val normalized = serversToJson(servers)
+        if (normalized != json) {
+            prefs.edit().putString(KEY_SERVERS, normalized).apply()
+        }
+        return servers
+    }
 
     fun addServer(name: String, url: String, token: String = ""): ServerConfig {
         val trimmedName = name.trim()
@@ -54,12 +53,13 @@ class PrefsStore(context: Context) {
         val trimmedToken = token.trim()
         require(trimmedName.isNotEmpty() && trimmedUrl.isNotEmpty()) { "Name and URL are required" }
         val servers = getServers()
+        require(servers.size < MAX_SERVERS) { "Only $MAX_SERVERS servers are supported" }
         val server = ServerConfig(
             id = UUID.randomUUID().toString(),
             name = trimmedName,
             url = trimmedUrl,
             token = trimmedToken,
-            active = servers.isEmpty(),
+            priority = servers.size + 1,
         )
         saveServers(servers + server)
         return server
@@ -78,32 +78,25 @@ class PrefsStore(context: Context) {
     }
 
     fun deleteServer(id: String) {
-        val remaining = getServers().filterNot { it.id == id }
-        if (remaining.isNotEmpty() && remaining.none { it.active }) {
-            saveServers(remaining.mapIndexed { index, server -> server.copy(active = index == 0) })
-        } else {
-            saveServers(remaining)
-        }
+        saveServers(getServers().filterNot { it.id == id }.withNormalizedPriorities())
     }
 
-    fun setActiveServer(id: String) {
-        saveServers(getServers().map { it.copy(active = it.id == id) })
+    fun moveServer(id: String, offset: Int) {
+        val servers = getServers().toMutableList()
+        val from = servers.indexOfFirst { it.id == id }
+        if (from == -1) return
+        val to = (from + offset).coerceIn(0, servers.lastIndex)
+        if (from == to) return
+        val server = servers.removeAt(from)
+        servers.add(to, server)
+        saveServers(servers.withNormalizedPriorities())
     }
-
-    fun getActiveServer(): ServerConfig? = getServers().firstOrNull { it.active }
 
     fun matchesAnyFilter(sender: String): Boolean {
         val upperSender = sender.uppercase()
         return getFilters().any { filter ->
             filter.enabled && upperSender.contains(filter.pattern.uppercase())
         }
-    }
-
-    fun getUploadLog(): List<UploadLogEntry> = parseLog(prefs.getString(KEY_LOG, "[]") ?: "[]")
-
-    fun appendLog(entry: UploadLogEntry) {
-        val updated = (listOf(entry) + getUploadLog()).take(MAX_LOG_ENTRIES)
-        prefs.edit().putString(KEY_LOG, logToJson(updated)).apply()
     }
 
     fun getUpdateManifestUrl(): String? {
@@ -124,13 +117,15 @@ class PrefsStore(context: Context) {
         prefs.edit().putString(KEY_SERVERS, serversToJson(servers)).apply()
     }
 
+    private fun List<ServerConfig>.withNormalizedPriorities(): List<ServerConfig> =
+        mapIndexed { index, server -> server.copy(priority = index + 1) }
+
     companion object {
+        const val MAX_SERVERS = 3
         private const val PREFS_NAME = "companion_prefs"
         private const val KEY_FILTERS = "sender_filters"
         private const val KEY_SERVERS = "servers"
-        private const val KEY_LOG = "upload_log"
         private const val KEY_UPDATE_MANIFEST_URL = "update_manifest_url"
-        private const val MAX_LOG_ENTRIES = 50
 
         private fun parseFilters(json: String): List<SenderFilter> {
             val array = JSONArray(json)
@@ -163,19 +158,31 @@ class PrefsStore(context: Context) {
 
         private fun parseServers(json: String): List<ServerConfig> {
             val array = JSONArray(json)
-            return buildList {
+            val parsed = buildList {
                 for (i in 0 until array.length()) {
                     val obj = array.getJSONObject(i)
                     add(
-                        ServerConfig(
-                            id = obj.getString("id"),
-                            name = obj.getString("name"),
-                            url = obj.getString("url"),
-                            token = obj.optString("token", ""),
-                            active = obj.optBoolean("active", false),
+                        Triple(
+                            ServerConfig(
+                                id = obj.getString("id"),
+                                name = obj.getString("name"),
+                                url = obj.getString("url"),
+                                token = obj.optString("token", ""),
+                                priority = obj.optInt("priority", i + 1),
+                            ),
+                            obj.optBoolean("active", false),
+                            obj.has("priority"),
                         )
                     )
                 }
+            }
+            val ordered = if (parsed.isNotEmpty() && parsed.none { it.third }) {
+                parsed.sortedByDescending { it.second }
+            } else {
+                parsed.sortedBy { it.first.priority }
+            }
+            return ordered.take(MAX_SERVERS).mapIndexed { index, item ->
+                item.first.copy(priority = index + 1)
             }
         }
 
@@ -188,46 +195,7 @@ class PrefsStore(context: Context) {
                         .put("name", server.name)
                         .put("url", server.url)
                         .put("token", server.token)
-                        .put("active", server.active)
-                )
-            }
-            return array.toString()
-        }
-
-        private fun parseLog(json: String): List<UploadLogEntry> {
-            val array = JSONArray(json)
-            return buildList {
-                for (i in 0 until array.length()) {
-                    val obj = array.getJSONObject(i)
-                    add(
-                        UploadLogEntry(
-                            timestamp = obj.getString("timestamp"),
-                            sender = obj.getString("sender"),
-                            success = obj.getBoolean("success"),
-                            message = obj.getString("message"),
-                            serverUrl = obj.optString("serverUrl", ""),
-                            httpCode = if (obj.has("httpCode") && !obj.isNull("httpCode")) {
-                                obj.getInt("httpCode")
-                            } else {
-                                null
-                            },
-                        )
-                    )
-                }
-            }
-        }
-
-        private fun logToJson(entries: List<UploadLogEntry>): String {
-            val array = JSONArray()
-            entries.forEach { entry ->
-                array.put(
-                    JSONObject()
-                        .put("timestamp", entry.timestamp)
-                        .put("sender", entry.sender)
-                        .put("success", entry.success)
-                        .put("message", entry.message)
-                        .put("serverUrl", entry.serverUrl)
-                        .put("httpCode", if (entry.httpCode != null) entry.httpCode else JSONObject.NULL)
+                        .put("priority", server.priority)
                 )
             }
             return array.toString()

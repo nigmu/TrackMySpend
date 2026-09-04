@@ -25,7 +25,8 @@ class SmsReceiver : BroadcastReceiver() {
         val pending = goAsync()
         executor.execute {
             try {
-                SmsUploader.upload(appContext, sender, body, receivedAt)
+                val message = MessageStore(appContext).insert(sender, body, receivedAt)
+                UploadWorker.enqueue(appContext, message.messageId)
             } finally {
                 pending.finish()
             }
@@ -33,7 +34,7 @@ class SmsReceiver : BroadcastReceiver() {
     }
 
     companion object {
-        // ponytail: single-thread executor; fine for sequential SMS uploads on one device
+        // ponytail: one thread is enough for tiny file appends before WorkManager takes over
         private val executor = Executors.newSingleThreadExecutor()
     }
 }

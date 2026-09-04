@@ -15,12 +15,25 @@
     <string name="cancel">Cancel</string>
     <string name="delete">Delete</string>
     <string name="test">Test</string>
-    <string name="active">Active</string>
+    <string name="move_up">↑</string>
+    <string name="move_down">↓</string>
+    <string name="move_server_up">Move server up</string>
+    <string name="move_server_down">Move server down</string>
+    <string name="server_limit_reached">Only three server URLs are supported.</string>
     <string name="no_filters">No sender filters yet. Tap + to add one.</string>
     <string name="no_servers">No servers yet. Tap + to add one.</string>
     <string name="no_logs">No upload attempts yet.</string>
     <string name="permission_rationale">SMS permission is required to forward matching messages to your server.</string>
-    <string name="permission_denied">SMS permission denied. The app cannot forward messages.</string>
+    <string name="grant_permission">Grant</string>
+    <string name="retry">Retry</string>
+    <string name="retry_queued">Retry queued</string>
+    <string name="received_at">Received: %1$s</string>
+    <string name="acked_at">Accepted: %1$s</string>
+    <string name="delivery_status">%1$s · %2$s</string>
+    <plurals name="attempt_count">
+        <item quantity="one">%1$d attempt</item>
+        <item quantity="other">%1$d attempts</item>
+    </plurals>
     <string name="menu_check_updates">Check for updates</string>
     <string name="menu_update_manifest_url">Update manifest URL…</string>
     <string name="update_manifest_url_title">Update manifest URL</string>

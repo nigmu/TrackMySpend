@@ -15,6 +15,7 @@ router = APIRouter(tags=["SMS"])
 
 
 class SmsIngestRequest(BaseModel):
+    message_id: str | None = None
     sender: str | None = None
     body: str
     received_at: datetime | None = None
@@ -44,30 +45,58 @@ def ingest_sms(
             device_id=payload.device_id,
         )
     except Exception:
-        logger.exception("sms ingest insert failed sender=%s", payload.sender)
+        logger.exception(
+            "sms ingest insert failed sender=%s message_id=%s",
+            payload.sender,
+            payload.message_id,
+        )
         insert_event_log(
             "sms.ingest_failed",
             "sms",
             "SMS ingest insert failed",
             severity="error",
-            context={"sender": payload.sender, "device_id": payload.device_id},
+            context={
+                "message_id": payload.message_id,
+                "sender": payload.sender,
+                "device_id": payload.device_id,
+            },
         )
         raise
     if inserted:
-        logger.info("sms ingest accepted id=%s sender=%s", row_id, payload.sender)
+        logger.info(
+            "sms ingest accepted id=%s sender=%s message_id=%s",
+            row_id,
+            payload.sender,
+            payload.message_id,
+        )
         insert_event_log(
             "sms.ingest_accepted",
             "sms",
             f"SMS ingested id={row_id}",
-            context={"id": row_id, "sender": payload.sender, "device_id": payload.device_id},
+            context={
+                "id": row_id,
+                "message_id": payload.message_id,
+                "sender": payload.sender,
+                "device_id": payload.device_id,
+            },
         )
     else:
-        logger.info("sms ingest duplicate id=%s sender=%s", row_id, payload.sender)
+        logger.info(
+            "sms ingest duplicate id=%s sender=%s message_id=%s",
+            row_id,
+            payload.sender,
+            payload.message_id,
+        )
         insert_event_log(
             "sms.ingest_duplicate",
             "sms",
             f"SMS duplicate skipped id={row_id}",
-            context={"id": row_id, "sender": payload.sender, "device_id": payload.device_id},
+            context={
+                "id": row_id,
+                "message_id": payload.message_id,
+                "sender": payload.sender,
+                "device_id": payload.device_id,
+            },
         )
     return {"status": "ok", "id": row_id, "duplicate": not inserted}
 

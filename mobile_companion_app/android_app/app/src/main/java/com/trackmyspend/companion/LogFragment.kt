@@ -7,6 +7,8 @@ import android.view.ViewGroup
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.work.WorkManager
+import com.google.android.material.snackbar.Snackbar
 import com.trackmyspend.companion.databinding.FragmentLogBinding
 import com.trackmyspend.companion.databinding.ItemLogBinding
 
@@ -15,7 +17,7 @@ class LogFragment : Fragment() {
     private var _binding: FragmentLogBinding? = null
     private val binding get() = _binding!!
 
-    private lateinit var prefs: PrefsStore
+    private lateinit var store: MessageStore
     private lateinit var adapter: LogAdapter
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
@@ -25,10 +27,18 @@ class LogFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        prefs = PrefsStore(requireContext())
-        adapter = LogAdapter()
+        store = MessageStore(requireContext())
+        adapter = LogAdapter { message ->
+            if (UploadWorker.retry(requireContext(), message.messageId)) {
+                Snackbar.make(binding.root, R.string.retry_queued, Snackbar.LENGTH_SHORT).show()
+                refreshList()
+            }
+        }
         binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
         binding.recyclerView.adapter = adapter
+        WorkManager.getInstance(requireContext())
+            .getWorkInfosByTagLiveData(UploadWorker.TAG)
+            .observe(viewLifecycleOwner) { refreshList() }
         refreshList()
     }
 
@@ -38,7 +48,7 @@ class LogFragment : Fragment() {
     }
 
     private fun refreshList() {
-        val entries = prefs.getUploadLog()
+        val entries = store.getAll()
         adapter.submit(entries)
         binding.emptyView.visibility = if (entries.isEmpty()) View.VISIBLE else View.GONE
     }
@@ -48,11 +58,13 @@ class LogFragment : Fragment() {
         _binding = null
     }
 
-    private class LogAdapter : androidx.recyclerview.widget.RecyclerView.Adapter<LogAdapter.ViewHolder>() {
+    private class LogAdapter(
+        private val onRetry: (OutboxMessage) -> Unit,
+    ) : androidx.recyclerview.widget.RecyclerView.Adapter<LogAdapter.ViewHolder>() {
 
-        private var items: List<UploadLogEntry> = emptyList()
+        private var items: List<OutboxMessage> = emptyList()
 
-        fun submit(entries: List<UploadLogEntry>) {
+        fun submit(entries: List<OutboxMessage>) {
             items = entries
             notifyDataSetChanged()
         }
@@ -71,31 +83,56 @@ class LogFragment : Fragment() {
         inner class ViewHolder(private val itemBinding: ItemLogBinding) :
             androidx.recyclerview.widget.RecyclerView.ViewHolder(itemBinding.root) {
 
-            fun bind(entry: UploadLogEntry) {
-                itemBinding.timestampText.text = entry.timestamp
-                itemBinding.senderText.text = entry.sender
-                itemBinding.statusText.text = if (entry.success) {
-                    "Success: ${entry.message}"
-                } else {
-                    "Failed: ${entry.message}"
+            fun bind(entry: OutboxMessage) {
+                itemBinding.timestampText.text = itemBinding.root.context.getString(
+                    R.string.received_at,
+                    entry.receivedAt,
+                )
+                itemBinding.senderText.text = senderSnippet(entry.sender)
+                itemBinding.statusText.text = itemBinding.root.context.getString(
+                    R.string.delivery_status,
+                    entry.status.name.lowercase().replaceFirstChar { it.uppercase() },
+                    itemBinding.root.resources.getQuantityString(
+                        R.plurals.attempt_count,
+                        entry.attemptCount,
+                        entry.attemptCount,
+                    ),
+                )
+                val color = when (entry.status) {
+                    DeliveryStatus.SENT -> R.color.log_success
+                    DeliveryStatus.FAILED -> R.color.log_failure
+                    else -> R.color.log_pending
                 }
-                val color = if (entry.success) R.color.log_success else R.color.log_failure
                 itemBinding.statusText.setTextColor(
                     ContextCompat.getColor(itemBinding.root.context, color)
                 )
                 val details = buildString {
-                    if (entry.serverUrl.isNotBlank()) append(entry.serverUrl)
+                    append("ID ${entry.messageId.take(8)}")
+                    entry.ackedAt?.let {
+                        append("\n")
+                        append(itemBinding.root.context.getString(R.string.acked_at, it))
+                    }
+                    if (entry.lastServerUrl.isNotBlank()) {
+                        append("\n")
+                        append(entry.lastServerUrl)
+                    }
                     if (entry.httpCode != null) {
-                        if (isNotEmpty()) append(" · ")
+                        append(" · ")
                         append("HTTP ${entry.httpCode}")
                     }
+                    entry.lastError?.let {
+                        append("\n")
+                        append(it)
+                    }
                 }
-                if (details.isBlank()) {
-                    itemBinding.detailText.visibility = View.GONE
-                } else {
-                    itemBinding.detailText.visibility = View.VISIBLE
-                    itemBinding.detailText.text = details
-                }
+                itemBinding.detailText.text = details
+                itemBinding.retryButton.visibility =
+                    if (entry.status == DeliveryStatus.FAILED) View.VISIBLE else View.GONE
+                itemBinding.retryButton.setOnClickListener { onRetry(entry) }
+            }
+
+            private fun senderSnippet(sender: String): String {
+                return if (sender.length <= 24) sender else sender.take(21) + "..."
             }
         }
     }

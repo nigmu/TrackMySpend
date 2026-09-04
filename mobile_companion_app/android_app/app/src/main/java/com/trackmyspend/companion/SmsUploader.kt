@@ -1,63 +1,28 @@
 package com.trackmyspend.companion
 
-import android.content.Context
-import android.provider.Settings
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
 
 object SmsUploader {
 
-    private val isoFormatter: DateTimeFormatter = DateTimeFormatter.ISO_OFFSET_DATE_TIME
-
-    fun upload(context: Context, sender: String, body: String, receivedAtMillis: Long) {
-        val appContext = context.applicationContext
-        val prefs = PrefsStore(appContext)
-        val server = prefs.getActiveServer()
-        val timestamp = isoFormatter.format(
-            ZonedDateTime.ofInstant(
-                java.time.Instant.ofEpochMilli(receivedAtMillis),
-                java.time.ZoneId.systemDefault()
-            )
-        )
-
-        if (server == null) {
-            prefs.appendLog(
-                UploadLogEntry(
-                    timestamp = timestamp,
-                    sender = senderSnippet(sender),
-                    success = false,
-                    message = "No active server configured",
-                )
-            )
-            return
-        }
-
-        val deviceId = Settings.Secure.getString(appContext.contentResolver, Settings.Secure.ANDROID_ID) ?: ""
+    fun upload(server: ServerConfig, message: OutboxMessage, deviceId: String): UploadResult {
         val payload = JSONObject()
-            .put("sender", sender)
-            .put("body", body)
-            .put("received_at", timestamp)
+            .put("message_id", message.messageId)
+            .put("sender", message.sender)
+            .put("body", message.body)
+            .put("received_at", message.receivedAt)
             .put("device_id", deviceId)
             .toString()
-
-        val result = postJson("${server.url}/sms/ingest", payload, server.token)
-        prefs.appendLog(
-            UploadLogEntry(
-                timestamp = timestamp,
-                sender = senderSnippet(sender),
-                success = result.success,
-                message = result.message,
-                serverUrl = server.url,
-                httpCode = result.httpCode,
-            )
-        )
+        return postJson("${server.url}/sms/ingest", payload, server.token)
     }
+
+    internal fun attemptPlan(servers: List<ServerConfig>): List<ServerConfig> =
+        servers.firstOrNull()?.let { primary -> List(PRIMARY_ATTEMPTS) { primary } + servers.drop(1) }
+            ?: emptyList()
 
     fun testHealth(serverUrl: String): Pair<Boolean, String> {
         val url = serverUrl.trim().trimEnd('/')
@@ -80,13 +45,16 @@ object SmsUploader {
     private fun postJson(urlString: String, json: String, token: String): UploadResult {
         return try {
             val conn = openPost(urlString, json, token)
-            val code = conn.responseCode
-            val body = readStream(if (code in 200..299) conn.inputStream else conn.errorStream)
-            conn.disconnect()
-            if (code in 200..299) {
-                UploadResult(true, body.ifBlank { "HTTP $code" }, code)
-            } else {
-                UploadResult(false, "HTTP $code: ${body.ifBlank { "error" }}", code)
+            try {
+                val code = conn.responseCode
+                val body = readStream(if (code in 200..299) conn.inputStream else conn.errorStream)
+                if (code in 200..299) {
+                    UploadResult(true, body.ifBlank { "HTTP $code" }, code)
+                } else {
+                    UploadResult(false, "HTTP $code: ${body.ifBlank { "error" }}", code)
+                }
+            } finally {
+                conn.disconnect()
             }
         } catch (e: Exception) {
             UploadResult(false, e.message ?: e.javaClass.simpleName, null)
@@ -120,9 +88,7 @@ object SmsUploader {
         return BufferedReader(InputStreamReader(stream, Charsets.UTF_8)).use { it.readText() }.trim()
     }
 
-    private fun senderSnippet(sender: String): String {
-        return if (sender.length <= 24) sender else sender.take(21) + "..."
-    }
+    data class UploadResult(val success: Boolean, val message: String, val httpCode: Int?)
 
-    private data class UploadResult(val success: Boolean, val message: String, val httpCode: Int?)
+    private const val PRIMARY_ATTEMPTS = 3
 }

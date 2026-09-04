@@ -7,4 +7,5 @@
     <color name="black">#000000</color>
     <color name="log_success">#2E7D32</color>
     <color name="log_failure">#C62828</color>
+    <color name="log_pending">#455A64</color>
 </resources>
