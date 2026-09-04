@@ -5,6 +5,8 @@ graphify-out/
 .cursor/
 trackmyspend-run.sh
 TrackMySpend.service
+test.md
+
 
 # Python
 __pycache__/

@@ -40,12 +40,12 @@ python -m src.db.migrate
 python main.py
 ```
 
-From the phone, the URL must be a LAN (or Tailscale) address, not `127.0.0.1`.
+From the phone, do not use `127.0.0.1`. Prefer the Cloudflare API URL; LAN and Tailscale are manual backups.
 
-Check from a PC on the same network:
+Check:
 
 ```
-http://<server-ip>:2006/health
+https://server-trackmyspend.nigmulabs.xyz/health
 ```
 
 You should see `{"status":"ok"}`.
@@ -60,9 +60,10 @@ Open the folder `mobile_companion_app/android_app` in Android Studio, not the wh
 
 1. Allow SMS permissions when asked.
 2. **Filters** tab — add a sender pattern, for example `HDFCBK`.
-3. **Servers** tab — add a name and URL like `http://192.168.1.63:2006`
-   - No path. No slash at the end.
-   - Turn **Active** on.
+3. **Servers** tab — add three URLs (no path, no trailing slash):
+   - Cloudflare (set **Active**): `https://server-trackmyspend.nigmulabs.xyz`
+   - Tailscale: `http://100.64.232.11:2006`
+   - LAN: `http://192.168.1.63:2006`
    - Tap **Test**. You want `OK: {"status":"ok"}`.
 4. If the server `.env` has `SMS_INGEST_TOKEN`, type the same token in the server dialog on the phone. If that env var is empty, leave the token blank.
 
@@ -80,10 +81,10 @@ The app does **not** check for updates by itself. You tap the menu.
 
 1. Put the APK in `releases/companion/` and edit `releases/companion/update.json` (details in the Android README).
 2. On the phone: menu **☰** → **Update manifest URL…** →  
-   `http://<server-ip>:2006/app/update.json`
+   `https://server-trackmyspend.nigmulabs.xyz/app/update.json`
 3. **☰** → **Check for updates**
 
-The phone must be able to download the APK URL in that JSON file. Use the same kind of address the phone uses for SMS (LAN vs Tailscale).
+The phone must be able to download the APK URL in that JSON file. Use the same kind of address the phone uses for SMS (tunnel vs Tailscale vs LAN).
 
 The new APK must be signed with the **same key** as the app already installed. Android may ask to allow installing from this app.
 

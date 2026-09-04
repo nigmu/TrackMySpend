@@ -16,8 +16,17 @@ You run two things:
 | API (Gmail, SMS ingest, app updates, health check) | 2006 | `python main.py` |
 | Web UI | 2007 | `python -m http.server 2007 --directory frontend` |
 
-Open the UI at http://localhost:2007  
-The API is at http://localhost:2006
+On this machine the UI is http://localhost:2007 and the API is http://localhost:2006.
+
+Three ways to reach the same server (no automatic failover — pick one):
+
+| Path | API | UI |
+|------|-----|-----|
+| Cloudflare (primary) | https://server-trackmyspend.nigmulabs.xyz | https://trackmyspend.nigmulabs.xyz |
+| Tailscale | http://100.64.232.11:2006 | http://100.64.232.11:2007 |
+| LAN (other devices) | http://192.168.1.63:2006 | http://192.168.1.63:2007 |
+
+`localhost` only works on the server. Phones and other PCs on Wi‑Fi use `192.168.1.63`.
 
 Commands below are **Linux first**. **macOS** uses the same commands unless a note says otherwise. **Windows** uses PowerShell where the command is different.
 
@@ -37,7 +46,7 @@ There is no extra SMS server. Do not use port 2005.
 
 1. Install the Android companion app on a real phone.
 2. Add a sender filter on the phone (for example `HDFCBK`). These filters live on the phone, not in the web UI.
-3. Add the API URL, for example `http://192.168.1.63:2006`.
+3. Add the API URL. Primary: `https://server-trackmyspend.nigmulabs.xyz`. Backups: Tailscale `http://100.64.232.11:2006` or LAN `http://192.168.1.63:2006`. Set **Active** on the tunnel URL.
 4. Matching SMS are posted to `/sms/ingest` and stored in `raw_sms_data`.
 5. You can see them on the web **SMS** page. They are not parsed into transactions yet.
 
@@ -113,8 +122,15 @@ Set in `.env`:
 
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
-- `PUBLIC_HOST` — host/IP clients use (no scheme/port). Local: `localhost`.  
-  Google Console redirect must be `http://<PUBLIC_HOST>:2006/auth/gmail/callback`
+- `API_PUBLIC_BASE` — public API URL (Cloudflare). Google Console redirect must be  
+  `{API_PUBLIC_BASE}/auth/gmail/callback`  
+  (this machine: `https://server-trackmyspend.nigmulabs.xyz/auth/gmail/callback`)
+- `FRONTEND_ORIGIN` — public UI URL (OAuth return). This machine: `https://trackmyspend.nigmulabs.xyz`
+- `SMS_INGEST_TOKEN` — required once the API is on the internet; the phone must send the same value as header `X-TrackMySpend-Token`
+
+Connect Gmail from the public UI (`https://trackmyspend.nigmulabs.xyz`), not from a LAN IP. Google rejects private-IP redirect URIs.
+
+If you are not using a public hostname, omit `API_PUBLIC_BASE` / `FRONTEND_ORIGIN` and set `PUBLIC_HOST` (host only, no scheme/port) to derive `http://<host>:2006` and `:2007`.
 
 ### 4. Install Python packages, encryption key, and tables
 
@@ -157,13 +173,13 @@ Activate the venv in this terminal too (Linux/macOS: `source .venv/bin/activate`
 python -m http.server 2007 --directory frontend
 ```
 
-Open http://localhost:2007
+Open http://localhost:2007 (or https://trackmyspend.nigmulabs.xyz).
 
-API base in the UI comes from `PUBLIC_HOST` in `.env` (written to `frontend/js/env.js` when the API starts).
+API base in the UI comes from `API_PUBLIC_BASE` in `.env` (written to `frontend/js/env.js` when the API starts).
 
 ### 7. Log in with Gmail
 
-1. In the web UI, open **Accounts**.
+1. Open the public UI (`https://trackmyspend.nigmulabs.xyz`), then **Accounts**.
 2. Click **Connect Gmail**.
 3. Sign in with the Google account that receives bank emails, and allow access.
 4. You should return to the UI with that account listed.
@@ -181,9 +197,12 @@ After you pull code that changes the database, activate `.venv`, run `python -m 
 | `DATABASE_URL` | Postgres connection string |
 | `GOOGLE_CLIENT_ID` | Gmail OAuth |
 | `GOOGLE_CLIENT_SECRET` | Gmail OAuth |
-| `PUBLIC_HOST` | Host/IP for API, UI, and Google redirect (no scheme/port) |
+| `API_PUBLIC_BASE` | Public API URL (OAuth redirect + UI default). Example: `https://server-trackmyspend.nigmulabs.xyz` |
+| `FRONTEND_ORIGIN` | Public UI origin (OAuth return + CORS). Example: `https://trackmyspend.nigmulabs.xyz` |
+| `CORS_EXTRA_ORIGINS` | Extra UI origins (LAN / Tailscale), comma-separated |
+| `PUBLIC_HOST` | Fallback host only (no scheme/port) if the two bases above are unset |
 | `ENCRYPTION_KEY` | Encrypts Gmail tokens in the database |
-| `SMS_INGEST_TOKEN` | Optional. If set, the phone must send the same value as header `X-TrackMySpend-Token` |
+| `SMS_INGEST_TOKEN` | Required when the API is public. Phone sends it as `X-TrackMySpend-Token` |
 | `LOG_LEVEL` | Log verbosity (`INFO` is fine) |
 | `LOG_DIR` | Folder for `app.log` |
 | `LOG_JSON` | `true` = JSON log lines |
@@ -245,7 +264,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now TrackMySpend.service
 ```
 
-In `.env` on that machine, set `PUBLIC_HOST` to the LAN IP or hostname clients use (e.g. `192.168.1.63`). Match Google Console redirect to `http://<PUBLIC_HOST>:2006/auth/gmail/callback`.
+In `.env` on that machine, set `API_PUBLIC_BASE` and `FRONTEND_ORIGIN` to the Cloudflare URLs (see table at the top). Match Google Console redirect to `{API_PUBLIC_BASE}/auth/gmail/callback`. Put LAN and Tailscale UI origins in `CORS_EXTRA_ORIGINS`. If Cloudflare Access is used, put it on the **UI** host only — Access on the whole API would block companion SMS ingest unless `/sms/ingest` is bypassed.
 
 After code or database changes:
 
@@ -259,7 +278,11 @@ On **macOS** or **Windows**, there is no systemd unit here — keep `python main
 
 ## Android companion
 
-The phone app sends SMS to this API on port **2006**.
+The phone app sends SMS to this API. Add three Servers entries; keep the tunnel **Active**:
+
+- `https://server-trackmyspend.nigmulabs.xyz`
+- `http://100.64.232.11:2006`
+- `http://192.168.1.63:2006`
 
 Setup: [mobile_companion_app/README.md](mobile_companion_app/README.md)  
 Build/install: [mobile_companion_app/android_app/README.md](mobile_companion_app/android_app/README.md)

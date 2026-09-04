@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from .core.config import FRONTEND_ORIGIN
+from .core.config import CORS_ORIGINS
 from .core.logging import RequestLogMiddleware, configure_logging, get_logger
 
 os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
@@ -46,10 +46,9 @@ app = FastAPI(
 )
 
 app.add_middleware(RequestLogMiddleware)
-_cors_origins = {FRONTEND_ORIGIN, "http://localhost:2007", "http://127.0.0.1:2007"}
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=sorted(_cors_origins),
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -78,7 +78,7 @@ Copy `app-debug.apk` to the phone and open it to install.
 1. Allow SMS when the app asks (`RECEIVE_SMS`, `READ_SMS`).
 2. **Filters** — add part of the sender name, for example `HDFCBK`.  
    Matching is case-insensitive. These filters are **only on this phone**. They are not the Gmail filters in the website.
-3. **Servers** — add a name and the API URL, for example `http://192.168.1.63:2006`
+3. **Servers** — add the API URL. Primary: `https://server-trackmyspend.nigmulabs.xyz`. Backups: `http://100.64.232.11:2006` or `http://192.168.1.63:2006`.
    - Do not add `/sms/ingest` or a trailing `/`. The app adds `/health` and `/sms/ingest` itself.
    - **Ingest token** — only if the server `.env` has `SMS_INGEST_TOKEN`. Type the same value. If the server token is empty, leave this blank.
    - Mark the server **Active**.

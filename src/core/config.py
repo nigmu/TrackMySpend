@@ -1,17 +1,62 @@
 import json
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# One knob for LAN/prod: set PUBLIC_HOST=192.168.x.x (or a hostname).
-# Derives API URL, UI origin (CORS + OAuth return), and Google redirect.
+
+def normalize_origin(url: str) -> str:
+    raw = url.strip().rstrip("/")
+    parsed = urlparse(raw)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise ValueError(f"origin needs http(s) scheme and host: {url!r}")
+    if parsed.path not in ("", "/"):
+        raise ValueError(f"origin must not include a path: {url!r}")
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def resolve_public_urls(
+    public_host: str,
+    api_public_base: str = "",
+    frontend_origin: str = "",
+) -> tuple[str, str, str]:
+    """API base, UI origin, Google redirect. Explicit bases win over PUBLIC_HOST."""
+    host = (public_host or "localhost").strip() or "localhost"
+    if "://" in host or ":" in host:
+        raise ValueError(f"PUBLIC_HOST must be host only (no scheme/port): {host!r}")
+    api = (api_public_base or "").strip()
+    fe = (frontend_origin or "").strip()
+    api_out = normalize_origin(api) if api else f"http://{host}:2006"
+    fe_out = normalize_origin(fe) if fe else f"http://{host}:2007"
+    return api_out, fe_out, f"{api_out}/auth/gmail/callback"
+
+
+def cors_allowlist(frontend_origin: str, extra: str = "") -> list[str]:
+    origins = {
+        frontend_origin,
+        "http://localhost:2007",
+        "http://127.0.0.1:2007",
+    }
+    for part in extra.split(","):
+        piece = part.strip()
+        if piece:
+            origins.add(normalize_origin(piece))
+    return sorted(origins)
+
+
 PUBLIC_HOST = (os.environ.get("PUBLIC_HOST") or "localhost").strip() or "localhost"
-API_PUBLIC_BASE = f"http://{PUBLIC_HOST}:2006"
-FRONTEND_ORIGIN = f"http://{PUBLIC_HOST}:2007"
-GOOGLE_REDIRECT_URI = f"{API_PUBLIC_BASE}/auth/gmail/callback"
+API_PUBLIC_BASE, FRONTEND_ORIGIN, GOOGLE_REDIRECT_URI = resolve_public_urls(
+    PUBLIC_HOST,
+    os.environ.get("API_PUBLIC_BASE", ""),
+    os.environ.get("FRONTEND_ORIGIN", ""),
+)
+CORS_ORIGINS = cors_allowlist(
+    FRONTEND_ORIGIN,
+    os.environ.get("CORS_EXTRA_ORIGINS", ""),
+)
 
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
@@ -36,7 +81,7 @@ _FRONTEND_ENV_JS = Path(__file__).resolve().parents[2] / "frontend" / "js" / "en
 
 
 def write_frontend_env() -> Path:
-    """Ship PUBLIC_HOST-derived API base to the static UI (js/env.js)."""
+    """Ship API_PUBLIC_BASE to the static UI (js/env.js)."""
     _FRONTEND_ENV_JS.parent.mkdir(parents=True, exist_ok=True)
     payload = {"API_BASE": API_PUBLIC_BASE, "PUBLIC_HOST": PUBLIC_HOST}
     _FRONTEND_ENV_JS.write_text(
@@ -48,8 +93,6 @@ def write_frontend_env() -> Path:
 
 write_frontend_env()
 
-# ponytail: ceiling = trust PUBLIC_HOST has no scheme/port; upgrade = urlparse validation
-assert "://" not in PUBLIC_HOST and ":" not in PUBLIC_HOST, PUBLIC_HOST
-assert API_PUBLIC_BASE == f"http://{PUBLIC_HOST}:2006"
-assert FRONTEND_ORIGIN == f"http://{PUBLIC_HOST}:2007"
 assert GOOGLE_REDIRECT_URI == f"{API_PUBLIC_BASE}/auth/gmail/callback"
+assert API_PUBLIC_BASE == normalize_origin(API_PUBLIC_BASE)
+assert FRONTEND_ORIGIN == normalize_origin(FRONTEND_ORIGIN)
