@@ -11,8 +11,8 @@ android {
         applicationId = "com.trackmyspend.companion"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
     }
 
     buildTypes {
@@ -49,4 +49,23 @@ dependencies {
     implementation("androidx.recyclerview:recyclerview:1.3.2")
     implementation("androidx.fragment:fragment-ktx:1.6.2")
     implementation("androidx.coordinatorlayout:coordinatorlayout:1.2.0")
+}
+
+// After assembleDebug / assembleRelease, drop the APK where the API serves OTA files.
+val companionReleasesDir =
+    rootProject.projectDir.resolve("../../releases/companion").normalize().absoluteFile
+
+afterEvaluate {
+    listOf("debug", "release").forEach { buildType ->
+        val capitalize = buildType.replaceFirstChar { it.uppercase() }
+        val copyTask = tasks.register<Copy>("copy${capitalize}ApkToReleases") {
+            from(layout.buildDirectory.dir("outputs/apk/$buildType")) {
+                include("*.apk")
+            }
+            into(companionReleasesDir)
+            rename { "companion-${android.defaultConfig.versionName}.apk" }
+            doFirst { companionReleasesDir.mkdirs() }
+        }
+        tasks.named("assemble$capitalize").configure { finalizedBy(copyTask) }
+    }
 }

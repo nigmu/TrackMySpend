@@ -56,9 +56,9 @@ app.add_middleware(
 
 # Two independent data pipelines, each with its own raw table and its own routes:
 #   mail  (src/mail)  Gmail OAuth -> sync -> raw_mail_data -> parse -> transactions
-#   sms   (src/sms)   Android app -> POST /sms/ingest -> raw_sms_data (not yet parsed)
+#   sms   (src/sms)   TMS Companion -> POST /sms/ingest -> raw_sms_data (not yet parsed)
 # Shared/cross-cutting: accounts (Gmail OAuth creds), filters (Gmail sender_filters),
-# logs (app_event_logs), companion (Android OTA distribution).
+# logs (app_event_logs), companion (TMS Companion OTA distribution).
 app.include_router(accounts_router)
 app.include_router(filters_router)
 app.include_router(mail_router)

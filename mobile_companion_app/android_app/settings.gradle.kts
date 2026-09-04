@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "TrackMySpendCompanion"
+rootProject.name = "TMSCompanion"
 include(":app")

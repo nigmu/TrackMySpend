@@ -23,10 +23,10 @@ Three ways to reach the same server (no automatic failover — pick one):
 | Path | API | UI |
 |------|-----|-----|
 | Cloudflare (primary) | https://server-trackmyspend.nigmulabs.xyz | https://trackmyspend.nigmulabs.xyz |
-| Tailscale | http://100.64.232.11:2006 | http://100.64.232.11:2007 |
-| LAN (other devices) | http://192.168.1.63:2006 | http://192.168.1.63:2007 |
+| Tailscale | Tailscale address, port 2006 | Tailscale address, port 2007 |
+| LAN (other devices) | LAN address, port 2006 | LAN address, port 2007 |
 
-`localhost` only works on the server. Phones and other PCs on Wi‑Fi use `192.168.1.63`.
+`localhost` only works on the server. Phones and other PCs on Wi‑Fi use the machine’s LAN address. Put those UI origins in `CORS_EXTRA_ORIGINS`.
 
 Commands below are **Linux first**. **macOS** uses the same commands unless a note says otherwise. **Windows** uses PowerShell where the command is different.
 
@@ -44,9 +44,9 @@ There is no extra SMS server. Do not use port 2005.
 
 **SMS**
 
-1. Install the Android companion app on a real phone.
+1. Install TMS Companion on a real phone.
 2. Add a sender filter on the phone (for example `HDFCBK`). These filters live on the phone, not in the web UI.
-3. Add the API URL. Primary: `https://server-trackmyspend.nigmulabs.xyz`. Backups: Tailscale `http://100.64.232.11:2006` or LAN `http://192.168.1.63:2006`. Set **Active** on the tunnel URL.
+3. Add the API URL. Primary: `https://server-trackmyspend.nigmulabs.xyz`. Optionally add Tailscale and LAN backups (`http://<host>:2006`). Set **Active** on the tunnel URL.
 4. Matching SMS are posted to `/sms/ingest` and stored in `raw_sms_data`.
 5. You can see them on the web **SMS** page. They are not parsed into transactions yet.
 
@@ -57,13 +57,13 @@ src/mail/                         Gmail sync, parse, poller
 src/sms/                          SMS ingest
 src/accounts/                     Gmail login (OAuth)
 src/filters/                      Gmail sender filters (web UI)
-src/companion/                    Android app update files
+src/companion/                    TMS Companion OTA update files
 src/logs/                         Event log shown on the Logs page
 src/core/                         Config, logging, encryption, amount helper
 src/db/                           Database schema and migrate
 frontend/                         Web UI
-releases/companion/               Android APK + update.json
-mobile_companion_app/android_app/ Android app source
+releases/companion/               TMS Companion APK + update.json
+mobile_companion_app/android_app/ TMS Companion source
 bin/trackmyspend-run.sh           Starts API + UI together (Linux)
 deploy/TrackMySpend.service       systemd unit (Linux)
 ```
@@ -264,7 +264,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now TrackMySpend.service
 ```
 
-In `.env` on that machine, set `API_PUBLIC_BASE` and `FRONTEND_ORIGIN` to the Cloudflare URLs (see table at the top). Match Google Console redirect to `{API_PUBLIC_BASE}/auth/gmail/callback`. Put LAN and Tailscale UI origins in `CORS_EXTRA_ORIGINS`. If Cloudflare Access is used, put it on the **UI** host only — Access on the whole API would block companion SMS ingest unless `/sms/ingest` is bypassed.
+In `.env` on that machine, set `API_PUBLIC_BASE` and `FRONTEND_ORIGIN` to the Cloudflare URLs (see table at the top). Match Google Console redirect to `{API_PUBLIC_BASE}/auth/gmail/callback`. Put LAN and Tailscale UI origins in `CORS_EXTRA_ORIGINS`. If Cloudflare Access is used, put it on the **UI** host only — Access on the whole API would block TMS Companion SMS ingest unless `/sms/ingest` is bypassed.
 
 After code or database changes:
 
@@ -276,13 +276,9 @@ sudo systemctl restart TrackMySpend
 
 On **macOS** or **Windows**, there is no systemd unit here — keep `python main.py` and the UI server running yourself (two terminals), or use another process manager.
 
-## Android companion
+## TMS Companion
 
-The phone app sends SMS to this API. Add three Servers entries; keep the tunnel **Active**:
-
-- `https://server-trackmyspend.nigmulabs.xyz`
-- `http://100.64.232.11:2006`
-- `http://192.168.1.63:2006`
+The phone app sends SMS to this API. Add a Servers entry for the tunnel and keep it **Active**: `https://server-trackmyspend.nigmulabs.xyz`. Optionally add Tailscale and LAN backups (`http://<host>:2006`).
 
 Setup: [mobile_companion_app/README.md](mobile_companion_app/README.md)  
 Build/install: [mobile_companion_app/android_app/README.md](mobile_companion_app/android_app/README.md)

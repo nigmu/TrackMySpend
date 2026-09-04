@@ -1,4 +1,4 @@
-"""SMS pipeline: Android companion app -> POST /sms/ingest -> raw_sms_data.
+"""SMS pipeline: TMS Companion -> POST /sms/ingest -> raw_sms_data.
 
 Push-based (no poller, unlike the mail pipeline). Rows are stored as-is and
 deduplicated by content_hash; there is no parsing into `transactions` yet —

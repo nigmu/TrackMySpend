@@ -1,4 +1,4 @@
-# SMS companion
+# TMS Companion
 
 This Android app reads SMS on a **real phone** and sends matching messages to the TrackMySpend API.
 
@@ -60,10 +60,9 @@ Open the folder `mobile_companion_app/android_app` in Android Studio, not the wh
 
 1. Allow SMS permissions when asked.
 2. **Filters** tab — add a sender pattern, for example `HDFCBK`.
-3. **Servers** tab — add three URLs (no path, no trailing slash):
+3. **Servers** tab — add URLs (no path, no trailing slash):
    - Cloudflare (set **Active**): `https://server-trackmyspend.nigmulabs.xyz`
-   - Tailscale: `http://100.64.232.11:2006`
-   - LAN: `http://192.168.1.63:2006`
+   - Optional backups: Tailscale and LAN as `http://<host>:2006`
    - Tap **Test**. You want `OK: {"status":"ok"}`.
 4. If the server `.env` has `SMS_INGEST_TOKEN`, type the same token in the server dialog on the phone. If that env var is empty, leave the token blank.
 

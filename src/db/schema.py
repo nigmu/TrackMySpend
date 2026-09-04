@@ -6,7 +6,7 @@ Two independent pipelines, easy to tell apart by table prefix:
   - SMS:   raw_sms_data
            (no transactions link yet — SMS is stored raw; parsing it into
            transactions is the priority next step for this project, not yet built)
-  - Shared: app_event_logs (used by both pipelines + companion OTA)
+  - Shared: app_event_logs (used by both pipelines + TMS Companion OTA)
 """
 
 SCHEMA_STATEMENTS: list[str] = [

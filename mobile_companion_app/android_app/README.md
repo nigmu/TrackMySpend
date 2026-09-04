@@ -1,4 +1,4 @@
-# TrackMySpend Companion (Android)
+# TMS Companion (Android)
 
 This app listens for SMS and sends matching ones to TrackMySpend on port **2006**.
 
@@ -78,14 +78,14 @@ Copy `app-debug.apk` to the phone and open it to install.
 1. Allow SMS when the app asks (`RECEIVE_SMS`, `READ_SMS`).
 2. **Filters** — add part of the sender name, for example `HDFCBK`.  
    Matching is case-insensitive. These filters are **only on this phone**. They are not the Gmail filters in the website.
-3. **Servers** — add the API URL. Primary: `https://server-trackmyspend.nigmulabs.xyz`. Backups: `http://100.64.232.11:2006` or `http://192.168.1.63:2006`.
+3. **Servers** — add the API URL. Primary: `https://server-trackmyspend.nigmulabs.xyz`. Optional backups: Tailscale or LAN as `http://<host>:2006`.
    - Do not add `/sms/ingest` or a trailing `/`. The app adds `/health` and `/sms/ingest` itself.
    - **Ingest token** — only if the server `.env` has `SMS_INGEST_TOKEN`. Type the same value. If the server token is empty, leave this blank.
    - Mark the server **Active**.
 4. Tap **Test**. Success looks like `OK: {"status":"ok"}`.
 5. **Log** — last 50 uploads, with URL and HTTP status.
 
-HTTP on your home network is allowed on purpose so `http://192.168.x.x:2006` works without HTTPS.
+HTTP on your home network is allowed on purpose so a LAN `http://<host>:2006` URL works without HTTPS.
 
 Uploaded SMS appear on the website **SMS** page. Events appear on **Logs**.
 
@@ -97,7 +97,7 @@ The app never checks for updates on its own.
    Paste the full URL, for example:
 
    ```
-   http://192.168.1.63:2006/app/update.json
+   https://server-trackmyspend.nigmulabs.xyz/app/update.json
    ```
 
    You can also use a Tailscale IP. Leave the field empty to clear the saved URL.
@@ -108,7 +108,7 @@ The app never checks for updates on its own.
 
 If you never set a URL, you will see “Set update manifest URL first”.
 
-The first time, Android may ask to allow **Install unknown apps** for this companion. Allow it or the install will stop.
+The first time, Android may ask to allow **Install unknown apps** for TMS Companion. Allow it or the install will stop.
 
 The new APK must be signed with the **same key** as the app already on the phone.
 
@@ -151,14 +151,14 @@ The new APK must be signed with the **same key** as the app already on the phone
    {
      "version_code": 2,
      "version_name": "1.1",
-     "apk_url": "http://192.168.1.63:2006/releases/companion-1.1.apk",
+     "apk_url": "https://server-trackmyspend.nigmulabs.xyz/releases/companion-1.1.apk",
      "changelog": "- what changed"
    }
    ```
 
    `apk_url` must be an address the **phone** can open (same LAN or same Tailscale). The filename must exist in `releases/companion/`.
 
-5. On the phone: set the manifest URL to `http://<ip>:2006/app/update.json`
+5. On the phone: set the manifest URL to `https://server-trackmyspend.nigmulabs.xyz/app/update.json` (or a Tailscale/LAN host the phone can reach).
 6. **Check for updates**
 
 The API serves:

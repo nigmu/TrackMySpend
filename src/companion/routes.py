@@ -7,7 +7,7 @@ from ..core.logging import get_logger
 from ..logs.db import insert_event_log
 
 logger = get_logger(__name__)
-router = APIRouter(tags=["Companion"])
+router = APIRouter(tags=["TMS Companion"])
 
 RELEASES_DIR = Path(__file__).resolve().parents[2] / "releases" / "companion"
 UPDATE_JSON = RELEASES_DIR / "update.json"
@@ -33,7 +33,7 @@ def app_update():
         insert_event_log(
             "companion.manifest_missing",
             "companion",
-            "Companion update manifest missing; serving fallback",
+            "TMS Companion update manifest missing; serving fallback",
             severity="warning",
         )
         return _fallback_manifest()
@@ -44,7 +44,7 @@ def app_update():
         insert_event_log(
             "companion.manifest_unreadable",
             "companion",
-            "Companion update manifest unreadable; serving fallback",
+            "TMS Companion update manifest unreadable; serving fallback",
             severity="error",
         )
         return _fallback_manifest()
@@ -56,7 +56,7 @@ def app_update():
     insert_event_log(
         "companion.manifest_served",
         "companion",
-        f"Companion manifest served v{data.get('version_name', '')}",
+        f"TMS Companion manifest served v{data.get('version_name', '')}",
         context={
             "version_code": data.get("version_code"),
             "version_name": data.get("version_name"),
