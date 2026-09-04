@@ -25,8 +25,10 @@ class SmsReceiver : BroadcastReceiver() {
         val pending = goAsync()
         executor.execute {
             try {
-                val message = MessageStore(appContext).insert(sender, body, receivedAt)
-                UploadWorker.enqueue(appContext, message.messageId)
+                val message = MessageStore(appContext).insertIfNew(sender, body, receivedAt)
+                if (message != null) {
+                    UploadWorker.enqueue(appContext, message.messageId)
+                }
             } finally {
                 pending.finish()
             }

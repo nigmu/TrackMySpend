@@ -35,17 +35,23 @@ class MessageStore(context: Context) {
 
     private val file = AtomicFile(File(context.applicationContext.filesDir, FILE_NAME))
 
-    fun insert(sender: String, body: String, receivedAtMillis: Long): OutboxMessage {
-        val message = OutboxMessage(
-            messageId = UUID.randomUUID().toString(),
-            sender = sender,
-            body = body,
-            receivedAt = formatTime(receivedAtMillis),
-        )
+    /** Returns the new row, or null if sender+body+receivedAt already exists. */
+    fun insertIfNew(sender: String, body: String, receivedAtMillis: Long): OutboxMessage? {
+        val receivedAt = formatTime(receivedAtMillis)
         synchronized(lock) {
-            write(read() + message)
+            val messages = read()
+            if (messages.any { it.sender == sender && it.body == body && it.receivedAt == receivedAt }) {
+                return null
+            }
+            val message = OutboxMessage(
+                messageId = UUID.randomUUID().toString(),
+                sender = sender,
+                body = body,
+                receivedAt = receivedAt,
+            )
+            write(messages + message)
+            return message
         }
-        return message
     }
 
     fun get(messageId: String): OutboxMessage? = synchronized(lock) {
@@ -54,6 +60,10 @@ class MessageStore(context: Context) {
 
     fun getAll(): List<OutboxMessage> = synchronized(lock) {
         read().asReversed()
+    }
+
+    fun exportJson(): String = synchronized(lock) {
+        encodeMessages(read())
     }
 
     fun markSending(messageId: String) {

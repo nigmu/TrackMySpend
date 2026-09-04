@@ -2,6 +2,7 @@ package com.trackmyspend.companion
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.widget.PopupMenu
@@ -25,6 +26,15 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.RequestMultiplePermissions()
     ) {
         updatePermissionBanner()
+        recoverMissedSms()
+    }
+
+    private val storagePermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) exportOutbox() else {
+            Snackbar.make(binding.root, R.string.storage_permission_needed, Snackbar.LENGTH_LONG).show()
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -49,7 +59,7 @@ class MainActivity : AppCompatActivity() {
         }.attach()
 
         requestSmsPermissionsIfNeeded()
-        UploadWorker.enqueueAllPending(this)
+        recoverMissedSms()
     }
 
     override fun onResume() {
@@ -57,12 +67,29 @@ class MainActivity : AppCompatActivity() {
         updatePermissionBanner()
     }
 
+    private fun recoverMissedSms() {
+        UploadWorker.enqueueAllPending(this)
+        if (!hasSmsPermissions()) return
+        executor.execute {
+            InboxBackfill.run(this)
+        }
+    }
+
+    private fun hasSmsPermissions(): Boolean = SMS_PERMISSIONS.all {
+        ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+    }
+
     private fun showToolbarMenu() {
         PopupMenu(this, binding.toolbar).apply {
-            menu.add(0, MENU_CHECK_UPDATES, 0, R.string.menu_check_updates)
-            menu.add(0, MENU_UPDATE_MANIFEST_URL, 1, R.string.menu_update_manifest_url)
+            menu.add(0, MENU_EXPORT_OUTBOX, 0, R.string.menu_export_outbox)
+            menu.add(0, MENU_CHECK_UPDATES, 1, R.string.menu_check_updates)
+            menu.add(0, MENU_UPDATE_MANIFEST_URL, 2, R.string.menu_update_manifest_url)
             setOnMenuItemClickListener { item ->
                 when (item.itemId) {
+                    MENU_EXPORT_OUTBOX -> {
+                        requestExportOutbox()
+                        true
+                    }
                     MENU_CHECK_UPDATES -> {
                         checkForUpdates()
                         true
@@ -75,6 +102,47 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }.show()
+    }
+
+    private fun requestExportOutbox() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            exportOutbox()
+            return
+        }
+        val granted = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.WRITE_EXTERNAL_STORAGE,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (granted) {
+            exportOutbox()
+        } else {
+            storagePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        }
+    }
+
+    private fun exportOutbox() {
+        Snackbar.make(binding.root, R.string.export_started, Snackbar.LENGTH_SHORT).show()
+        executor.execute {
+            val result = runCatching { OutboxExporter.exportToDownloads(this) }
+            runOnUiThread {
+                result.fold(
+                    onSuccess = { name ->
+                        Snackbar.make(
+                            binding.root,
+                            getString(R.string.export_done, name),
+                            Snackbar.LENGTH_LONG,
+                        ).show()
+                    },
+                    onFailure = { error ->
+                        Snackbar.make(
+                            binding.root,
+                            getString(R.string.export_failed, error.message ?: error.javaClass.simpleName),
+                            Snackbar.LENGTH_LONG,
+                        ).show()
+                    },
+                )
+            }
+        }
     }
 
     private fun showUpdateManifestUrlDialog() {
@@ -198,13 +266,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updatePermissionBanner() {
-        val granted = SMS_PERMISSIONS.all {
-            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
-        }
-        binding.permissionBanner.visibility = if (granted) View.GONE else View.VISIBLE
+        binding.permissionBanner.visibility = if (hasSmsPermissions()) View.GONE else View.VISIBLE
     }
 
     companion object {
+        private const val MENU_EXPORT_OUTBOX = 0
         private const val MENU_CHECK_UPDATES = 1
         private const val MENU_UPDATE_MANIFEST_URL = 2
 

@@ -36,6 +36,11 @@
     </plurals>
     <string name="menu_check_updates">Check for updates</string>
     <string name="menu_update_manifest_url">Update manifest URL…</string>
+    <string name="menu_export_outbox">Export messages JSON</string>
+    <string name="export_started">Exporting…</string>
+    <string name="export_done">Saved to Downloads: %1$s</string>
+    <string name="export_failed">Export failed: %1$s</string>
+    <string name="storage_permission_needed">Storage permission is required to export on this Android version.</string>
     <string name="update_manifest_url_title">Update manifest URL</string>
     <string name="update_manifest_url_hint">Manifest URL (e.g. https://server-trackmyspend.nigmulabs.xyz/app/update.json)</string>
     <string name="update_manifest_url_saved">Manifest URL saved</string>

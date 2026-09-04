@@ -26,5 +26,15 @@ object ReliabilitySelfCheck {
             lastError = "offline",
         )
         check(MessageStore.decodeMessages(MessageStore.encodeMessages(listOf(message))) == listOf(message))
+
+        val receivedAt = MessageStore.formatTime(1_725_500_000_000L)
+        check(receivedAt.isNotBlank())
+        check(
+            MessageStore.decodeMessages(
+                MessageStore.encodeMessages(
+                    listOf(message.copy(receivedAt = receivedAt), message.copy(messageId = "dup", receivedAt = receivedAt)),
+                ),
+            ).size == 2,
+        )
     }
 }
