@@ -6,6 +6,9 @@ graphify-out/
 trackmyspend-run.sh
 TrackMySpend.service
 test.md
+schema.sql
+sms.json
+
 
 
 # Python

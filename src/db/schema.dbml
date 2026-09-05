@@ -1,0 +1,95 @@
+// TrackMySpend — paste into https://dbdiagram.io/d
+
+Table email_accounts {
+  id integer [pk, increment]
+  email_address text [not null, unique]
+  oauth_access_token text [not null]
+  oauth_refresh_token text [not null]
+  is_active boolean [not null, default: true]
+  polling_interval_min integer [not null, default: 15]
+  last_polled_at timestamptz
+  last_history_id bigint
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+}
+
+Table sender_filters {
+  id integer [pk, increment]
+  pattern text [not null, unique]
+  is_active boolean [not null, default: true]
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table raw_mail_data {
+  id bigint [pk, increment]
+  email_account_id integer [not null, ref: > email_accounts.id]
+  gmail_message_id text [not null, unique]
+  gmail_thread_id text
+  sender text
+  subject text
+  snippet text
+  email_sent_at timestamptz
+  gmail_received_at timestamptz
+  matched_filter_rule text
+  processing_status text [not null, default: 'pending']
+  error_message text
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (processing_status, id) [name: 'idx_raw_mail_data_status_id']
+  }
+}
+
+Table transactions {
+  id bigint [pk, increment]
+  raw_mail_id bigint [not null, unique, ref: > raw_mail_data.id]
+  amount_paisa bigint [not null]
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table sync_runs {
+  id bigint [pk, increment]
+  account_id integer [ref: > email_accounts.id]
+  trigger text [not null]
+  started_at timestamptz [not null, default: `now()`]
+  finished_at timestamptz
+  status text [not null, default: 'running']
+  messages_seen integer [not null, default: 0]
+  inserted integer [not null, default: 0]
+  skipped integer [not null, default: 0]
+  failed integer [not null, default: 0]
+  error_message text
+}
+
+Table raw_sms_data {
+  id bigint [pk, increment]
+  sender text
+  body text [not null]
+  received_at timestamptz
+  device_id text
+  processing_status text [not null, default: 'pending']
+  error_message text
+  content_hash text [not null, unique]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (processing_status, id) [name: 'idx_raw_sms_data_status_id']
+    content_hash [unique, name: 'idx_raw_sms_data_content_hash']
+  }
+}
+
+Table app_event_logs {
+  id bigint [pk, increment]
+  event_type text [not null]
+  source text [not null]
+  severity text [not null, default: 'info']
+  message text [not null]
+  context jsonb [not null, default: '{}']
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (created_at, id) [name: 'idx_app_event_logs_created_at']
+  }
+}
