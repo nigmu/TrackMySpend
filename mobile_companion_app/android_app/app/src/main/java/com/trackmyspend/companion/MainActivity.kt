@@ -13,14 +13,17 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.tabs.TabLayoutMediator
 import com.trackmyspend.companion.databinding.ActivityMainBinding
+import com.trackmyspend.companion.databinding.DialogBackfillSettingsBinding
 import com.trackmyspend.companion.databinding.DialogUpdateManifestUrlBinding
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var prefs: PrefsStore
     private val executor = Executors.newSingleThreadExecutor()
+    private val backfillRunning = AtomicBoolean(false)
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -67,12 +70,52 @@ class MainActivity : AppCompatActivity() {
         updatePermissionBanner()
     }
 
+    fun startBackfill(source: BackfillSource) {
+        if (!hasSmsPermissions()) {
+            Snackbar.make(binding.root, R.string.backfill_no_permission, Snackbar.LENGTH_LONG).show()
+            return
+        }
+        if (!backfillRunning.compareAndSet(false, true)) return
+        setBackfillLoading(true)
+        executor.execute {
+            val result = InboxBackfill.run(this, source)
+            runOnUiThread {
+                backfillRunning.set(false)
+                setBackfillLoading(false)
+                showBackfillResult(result)
+            }
+        }
+    }
+
     private fun recoverMissedSms() {
         UploadWorker.enqueueAllPending(this)
         if (!hasSmsPermissions()) return
-        executor.execute {
-            InboxBackfill.run(this)
+        if (MessageStore(this).isEmpty()) return
+        startBackfill(BackfillSource.ON_OPEN)
+    }
+
+    private fun setBackfillLoading(loading: Boolean) {
+        binding.backfillOverlay.visibility = if (loading) View.VISIBLE else View.GONE
+    }
+
+    private fun showBackfillResult(result: BackfillResult) {
+        if (result.skipped) return
+        val sourceLabel = when (result.source) {
+            BackfillSource.AFTER_SERVER_SAVE -> "save"
+            BackfillSource.ON_OPEN -> "open"
+            BackfillSource.MANUAL -> "manual"
         }
+        val text = when {
+            result.error != null && result.watermarkUsed ->
+                getString(R.string.backfill_watermark_failed)
+            result.error != null ->
+                result.error
+            result.hitCap ->
+                getString(R.string.backfill_done_cap, sourceLabel, result.enqueued)
+            else ->
+                getString(R.string.backfill_done, sourceLabel, result.enqueued)
+        }
+        Snackbar.make(binding.root, text, Snackbar.LENGTH_LONG).show()
     }
 
     private fun hasSmsPermissions(): Boolean = SMS_PERMISSIONS.all {
@@ -81,11 +124,21 @@ class MainActivity : AppCompatActivity() {
 
     private fun showToolbarMenu() {
         PopupMenu(this, binding.toolbar).apply {
-            menu.add(0, MENU_EXPORT_OUTBOX, 0, R.string.menu_export_outbox)
-            menu.add(0, MENU_CHECK_UPDATES, 1, R.string.menu_check_updates)
-            menu.add(0, MENU_UPDATE_MANIFEST_URL, 2, R.string.menu_update_manifest_url)
+            menu.add(0, MENU_PULL_SMS, 0, R.string.menu_pull_sms)
+            menu.add(0, MENU_BACKFILL_SETTINGS, 1, R.string.menu_backfill_settings)
+            menu.add(0, MENU_EXPORT_OUTBOX, 2, R.string.menu_export_outbox)
+            menu.add(0, MENU_CHECK_UPDATES, 3, R.string.menu_check_updates)
+            menu.add(0, MENU_UPDATE_MANIFEST_URL, 4, R.string.menu_update_manifest_url)
             setOnMenuItemClickListener { item ->
                 when (item.itemId) {
+                    MENU_PULL_SMS -> {
+                        startBackfill(BackfillSource.MANUAL)
+                        true
+                    }
+                    MENU_BACKFILL_SETTINGS -> {
+                        showBackfillSettingsDialog()
+                        true
+                    }
                     MENU_EXPORT_OUTBOX -> {
                         requestExportOutbox()
                         true
@@ -102,6 +155,28 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }.show()
+    }
+
+    private fun showBackfillSettingsDialog() {
+        val dialogBinding = DialogBackfillSettingsBinding.inflate(layoutInflater)
+        dialogBinding.lookbackInput.setText(prefs.getBackfillLookbackHours().toString())
+        dialogBinding.maxRowsInput.setText(prefs.getBackfillMaxRows().toString())
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.backfill_settings_title)
+            .setView(dialogBinding.root)
+            .setPositiveButton(R.string.save) { _, _ ->
+                val hours = dialogBinding.lookbackInput.text?.toString()?.toIntOrNull()
+                val rows = dialogBinding.maxRowsInput.text?.toString()?.toIntOrNull()
+                if (hours == null || rows == null) {
+                    Snackbar.make(binding.root, R.string.backfill_settings_invalid, Snackbar.LENGTH_LONG).show()
+                    return@setPositiveButton
+                }
+                prefs.setBackfillLookbackHours(hours)
+                prefs.setBackfillMaxRows(rows)
+                Snackbar.make(binding.root, R.string.backfill_settings_saved, Snackbar.LENGTH_SHORT).show()
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
     }
 
     private fun requestExportOutbox() {
@@ -270,9 +345,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     companion object {
-        private const val MENU_EXPORT_OUTBOX = 0
-        private const val MENU_CHECK_UPDATES = 1
-        private const val MENU_UPDATE_MANIFEST_URL = 2
+        private const val MENU_PULL_SMS = 0
+        private const val MENU_BACKFILL_SETTINGS = 1
+        private const val MENU_EXPORT_OUTBOX = 2
+        private const val MENU_CHECK_UPDATES = 3
+        private const val MENU_UPDATE_MANIFEST_URL = 4
 
         private val SMS_PERMISSIONS = arrayOf(
             Manifest.permission.RECEIVE_SMS,

@@ -1,6 +1,6 @@
 {
-  "version_code": 5,
-  "version_name": "1.4",
-  "apk_url": "https://server-trackmyspend.nigmulabs.xyz/releases/companion-1.4.apk",
-  "changelog": ""
+  "version_code": 6,
+  "version_name": "1.5",
+  "apk_url": "https://server-trackmyspend.nigmulabs.xyz/releases/companion-1.5.apk",
+  "changelog": "- Cursor-based SMS backfill with server watermark after Save\n- Manual Pull SMS, configurable lookback/cap, loading overlay"
 }

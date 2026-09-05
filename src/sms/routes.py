@@ -101,6 +101,22 @@ def ingest_sms(
     return {"status": "ok", "id": row_id, "duplicate": not inserted}
 
 
+@router.get("/sms/latest-received-at")
+def get_latest_received_at(
+    device_id: str = Query(min_length=1),
+    conn: Connection = Depends(get_db),
+    _: None = Depends(require_sms_token),
+):
+    latest = db.latest_received_at(conn, device_id)
+    insert_event_log(
+        "sms.watermark_fetched",
+        "sms",
+        "SMS watermark fetched",
+        context={"device_id": device_id, "received_at": latest.isoformat() if latest else None},
+    )
+    return {"received_at": latest.isoformat() if latest else None}
+
+
 @router.get("/sms")
 def get_sms(
     conn: Connection = Depends(get_db),

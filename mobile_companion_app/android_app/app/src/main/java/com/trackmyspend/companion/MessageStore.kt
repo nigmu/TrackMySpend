@@ -62,6 +62,15 @@ class MessageStore(context: Context) {
         read().asReversed()
     }
 
+    fun isEmpty(): Boolean = synchronized(lock) {
+        read().isEmpty()
+    }
+
+    /** Max receivedAt as epoch millis, or null if outbox is empty / unparseable. */
+    fun maxReceivedAtMillis(): Long? = synchronized(lock) {
+        read().mapNotNull { parseTimeMillis(it.receivedAt) }.maxOrNull()
+    }
+
     fun exportJson(): String = synchronized(lock) {
         encodeMessages(read())
     }
@@ -149,6 +158,10 @@ class MessageStore(context: Context) {
         fun formatTime(timestampMillis: Long): String = timeFormatter.format(
             ZonedDateTime.ofInstant(Instant.ofEpochMilli(timestampMillis), ZoneId.systemDefault())
         )
+
+        fun parseTimeMillis(iso: String): Long? = runCatching {
+            ZonedDateTime.parse(iso, timeFormatter).toInstant().toEpochMilli()
+        }.getOrNull()
 
         internal fun encodeMessages(messages: List<OutboxMessage>): String {
             val array = JSONArray()

@@ -27,8 +27,10 @@ object ReliabilitySelfCheck {
         )
         check(MessageStore.decodeMessages(MessageStore.encodeMessages(listOf(message))) == listOf(message))
 
-        val receivedAt = MessageStore.formatTime(1_725_500_000_000L)
+        val receivedAtMillis = 1_725_500_000_000L
+        val receivedAt = MessageStore.formatTime(receivedAtMillis)
         check(receivedAt.isNotBlank())
+        check(MessageStore.parseTimeMillis(receivedAt) == receivedAtMillis)
         check(
             MessageStore.decodeMessages(
                 MessageStore.encodeMessages(
@@ -36,5 +38,11 @@ object ReliabilitySelfCheck {
                 ),
             ).size == 2,
         )
+
+        // Cursor: local max wins; empty outbox falls back to lookback window.
+        val now = 1_800_000_000_000L
+        val lookback = InboxBackfill.chooseLocalOrLookback(null, 48, now)
+        check(lookback == now - 48L * 60L * 60L * 1000L)
+        check(InboxBackfill.chooseLocalOrLookback(now - 5_000L, 48, now) == now - 5_000L)
     }
 }

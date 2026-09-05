@@ -109,6 +109,20 @@ class PrefsStore(context: Context) {
         prefs.edit().putString(KEY_UPDATE_MANIFEST_URL, trimmed).apply()
     }
 
+    fun getBackfillLookbackHours(): Int =
+        prefs.getInt(KEY_BACKFILL_LOOKBACK_HOURS, DEFAULT_LOOKBACK_HOURS).coerceIn(1, MAX_LOOKBACK_HOURS)
+
+    fun setBackfillLookbackHours(hours: Int) {
+        prefs.edit().putInt(KEY_BACKFILL_LOOKBACK_HOURS, hours.coerceIn(1, MAX_LOOKBACK_HOURS)).apply()
+    }
+
+    fun getBackfillMaxRows(): Int =
+        prefs.getInt(KEY_BACKFILL_MAX_ROWS, DEFAULT_MAX_ROWS).coerceIn(1, MAX_MAX_ROWS)
+
+    fun setBackfillMaxRows(rows: Int) {
+        prefs.edit().putInt(KEY_BACKFILL_MAX_ROWS, rows.coerceIn(1, MAX_MAX_ROWS)).apply()
+    }
+
     private fun saveFilters(filters: List<SenderFilter>) {
         prefs.edit().putString(KEY_FILTERS, filtersToJson(filters)).apply()
     }
@@ -122,10 +136,16 @@ class PrefsStore(context: Context) {
 
     companion object {
         const val MAX_SERVERS = 3
+        const val DEFAULT_LOOKBACK_HOURS = 48
+        const val DEFAULT_MAX_ROWS = 200
+        const val MAX_LOOKBACK_HOURS = 24 * 30
+        const val MAX_MAX_ROWS = 5000
         private const val PREFS_NAME = "companion_prefs"
         private const val KEY_FILTERS = "sender_filters"
         private const val KEY_SERVERS = "servers"
         private const val KEY_UPDATE_MANIFEST_URL = "update_manifest_url"
+        private const val KEY_BACKFILL_LOOKBACK_HOURS = "backfill_lookback_hours"
+        private const val KEY_BACKFILL_MAX_ROWS = "backfill_max_rows"
 
         private fun parseFilters(json: String): List<SenderFilter> {
             val array = JSONArray(json)

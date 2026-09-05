@@ -80,8 +80,24 @@ def count_sms(conn: Connection) -> int:
     return int(row["n"]) if row else 0
 
 
+def latest_received_at(conn: Connection, device_id: str) -> datetime | None:
+    """Max received_at for this device, or None if the device has no rows."""
+    row = conn.execute(
+        """
+        SELECT MAX(received_at) AS latest
+        FROM raw_sms_data
+        WHERE device_id = %s
+        """,
+        (device_id.strip(),),
+    ).fetchone()
+    if row is None or row["latest"] is None:
+        return None
+    return row["latest"]
+
+
 if __name__ == "__main__":
     from datetime import UTC, datetime as dt
+    from unittest.mock import MagicMock
 
     when = dt(2026, 9, 2, 20, 0, tzinfo=UTC)
     a = sms_content_hash("VM-HDFCBK", "Rs.100 spent", when, "dev1")
@@ -90,4 +106,10 @@ if __name__ == "__main__":
     assert a == b
     assert a != c
     assert len(a) == 64
-    print("sms content hash ok")
+
+    conn = MagicMock()
+    conn.execute.return_value.fetchone.return_value = {"latest": None}
+    assert latest_received_at(conn, "dev1") is None
+    conn.execute.return_value.fetchone.return_value = {"latest": when}
+    assert latest_received_at(conn, "dev1") == when
+    print("sms content hash + latest_received_at ok")

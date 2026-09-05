@@ -88,12 +88,16 @@ class ServersFragment : Fragment() {
                 val url = dialogBinding.urlInput.text?.toString().orEmpty()
                 val token = dialogBinding.tokenInput.text?.toString().orEmpty()
                 if (name.isBlank() || url.isBlank()) return@setPositiveButton
+                val outboxWasEmpty = MessageStore(requireContext()).isEmpty()
                 if (existing == null) {
                     prefs.addServer(name, url, token)
                 } else {
                     prefs.updateServer(existing.id, name, url, token)
                 }
                 refreshList()
+                if (outboxWasEmpty) {
+                    (activity as? MainActivity)?.startBackfill(BackfillSource.AFTER_SERVER_SAVE)
+                }
             }
             .setNegativeButton(R.string.cancel, null)
             .show()

@@ -5,7 +5,7 @@ TMS Companion is an Android app that reads SMS on a real phone and sends matchin
 The API is the main TrackMySpend service (`python main.py`, port **2006**). There is no separate SMS server. Carrier SMS is not available in a normal emulator, so use a physical phone.
 
 - App ID: `com.trackmyspend.companion`
-- Current version: `1.4` (`versionCode 5`)
+- Current version: `1.5` (`versionCode 6`)
 - Minimum Android: 8.0 (API 26)
 - Target Android: 14 (API 34)
 - Build JDK: 17
@@ -25,7 +25,13 @@ The API is the main TrackMySpend service (`python main.py`, port **2006**). Ther
 
 - **Background SMS reception:** `SmsReceiver` handles Android's `SMS_RECEIVED` broadcast, joins multipart messages, and records the sender, body, and received time.
 - **Sender filters:** matching uses a case-insensitive sender substring. For example, `HDFCBK` matches a sender such as `VM-HDFCBK`. Filters are stored only on the phone and are separate from the Gmail filters in the web app.
-- **Missed-message recovery:** when the app starts or SMS permission is granted, it checks up to 200 inbox messages from the previous 48 hours. Matching messages that are not already in the outbox are queued.
+- **Missed-message recovery:** catch-up is cursor-based, not a blind 48h rescan.
+  - **After saving a server while the outbox is empty** (first install / reinstall): the app GETs `/sms/latest-received-at` for this device (tries servers in priority order), snapshots that time once, then scans the inbox for matching SMS with `DATE >=` that watermark (or the last **X** hours if the DB has no rows). The boundary SMS may re-upload; the server `content_hash` drops duplicates.
+  - **On later opens** (outbox already has rows): scan from the max local outbox `receivedAt` only — no server watermark.
+  - **Saving a 2nd/3rd server or editing a server** while the outbox is non-empty does **not** re-run watermark backfill.
+  - **Manual Pull SMS** (☰ menu): same shared path (watermark if outbox empty, else local cursor). Use this if watermark GET failed on all servers.
+  - **X hours** and **max scan rows** are configurable under ☰ → Backfill settings (defaults 48h / 200). A snackbar warns if the cap is hit.
+  - A loading overlay shows while a backfill scan runs (not for live SMS). Backfill events are snackbar’d on the phone and posted to `POST /logs/event` when a server is reachable.
 
 ### Reliable delivery
 
@@ -68,8 +74,10 @@ LAN URLs such as `http://<host>:2006` are allowed. Do not add `/sms/ingest`, `/h
 
 - `GET /health` — test API availability.
 - `POST /sms/ingest` — accept a message from the phone.
+- `GET /sms/latest-received-at` — max `received_at` for a `device_id` (watermark; requires ingest token when configured).
 - `GET /sms` — list stored SMS records.
 - `GET /logs` — list operational events.
+- `POST /logs/event` — companion backfill / ops events (requires ingest token when configured).
 - `GET /app/update.json` — return the companion update manifest.
 - `GET /releases/<filename>` — download a published APK.
 
@@ -129,7 +137,7 @@ cd mobile_companion_app\android_app
 .\gradlew.bat assembleDebug
 ```
 
-The original debug APK is written to `app/build/outputs/apk/debug/app-debug.apk`. The build also copies it to `releases/companion/companion-1.4.apk`.
+The original debug APK is written to `app/build/outputs/apk/debug/app-debug.apk`. The build also copies it to `releases/companion/companion-1.5.apk`.
 
 ## Install and configure
 
