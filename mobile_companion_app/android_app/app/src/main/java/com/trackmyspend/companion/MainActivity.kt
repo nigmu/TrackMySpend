@@ -5,13 +5,17 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.view.View
-import android.widget.PopupMenu
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.fragment.app.Fragment
+import androidx.fragment.app.FragmentManager
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
-import com.google.android.material.tabs.TabLayoutMediator
+import com.google.android.material.transition.MaterialFadeThrough
+import com.google.android.material.transition.MaterialSharedAxis
 import com.trackmyspend.companion.databinding.ActivityMainBinding
 import com.trackmyspend.companion.databinding.DialogBackfillSettingsBinding
 import com.trackmyspend.companion.databinding.DialogUpdateManifestUrlBinding
@@ -24,11 +28,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var prefs: PrefsStore
     private val executor = Executors.newSingleThreadExecutor()
     private val backfillRunning = AtomicBoolean(false)
+    private var selectedTag = TAG_HOME
+    private var navReady = false
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) {
-        updatePermissionBanner()
         recoverMissedSms()
     }
 
@@ -48,26 +53,73 @@ class MainActivity : AppCompatActivity() {
         if (BuildConfig.DEBUG) ReliabilitySelfCheck.run()
 
         setSupportActionBar(binding.toolbar)
-        binding.toolbar.setNavigationOnClickListener { showToolbarMenu() }
-        binding.grantPermissionButton.setOnClickListener { requestSmsPermissionsIfNeeded() }
+        binding.toolbar.setNavigationOnClickListener {
+            if (isSettingsVisible()) supportFragmentManager.popBackStack()
+        }
 
-        val adapter = MainPagerAdapter(this)
-        binding.viewPager.adapter = adapter
-        TabLayoutMediator(binding.tabLayout, binding.viewPager) { tab, position ->
-            tab.text = when (position) {
-                0 -> getString(R.string.tab_filters)
-                1 -> getString(R.string.tab_servers)
-                else -> getString(R.string.tab_log)
+        binding.bottomNav.setOnItemSelectedListener { item ->
+            if (!navReady) return@setOnItemSelectedListener true
+            val tag = when (item.itemId) {
+                R.id.nav_home -> TAG_HOME
+                R.id.nav_servers -> TAG_SERVERS
+                R.id.nav_filters -> TAG_FILTERS
+                else -> TAG_LOG
             }
-        }.attach()
+            showTab(tag)
+            true
+        }
 
+        supportFragmentManager.addOnBackStackChangedListener { updateChrome() }
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (isSettingsVisible()) {
+                    supportFragmentManager.popBackStack()
+                } else {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                    isEnabled = true
+                }
+            }
+        })
+
+        selectedTag = savedInstanceState?.getString(STATE_TAB) ?: TAG_HOME
+        if (savedInstanceState == null) {
+            showTab(selectedTag)
+        } else {
+            updateChrome()
+        }
+        val navId = when (selectedTag) {
+            TAG_SERVERS -> R.id.nav_servers
+            TAG_FILTERS -> R.id.nav_filters
+            TAG_LOG -> R.id.nav_log
+            else -> R.id.nav_home
+        }
+        binding.bottomNav.selectedItemId = navId
+        navReady = true
+
+        binding.root.post { applyBlur() }
         requestSmsPermissionsIfNeeded()
         recoverMissedSms()
     }
 
-    override fun onResume() {
-        super.onResume()
-        updatePermissionBanner()
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString(STATE_TAB, selectedTag)
+    }
+
+    override fun onCreateOptionsMenu(menu: android.view.Menu): Boolean {
+        if (selectedTag == TAG_HOME && !isSettingsVisible()) {
+            menuInflater.inflate(R.menu.menu_home, menu)
+        }
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: android.view.MenuItem): Boolean {
+        if (item.itemId == R.id.action_settings) {
+            openSettings()
+            return true
+        }
+        return super.onOptionsItemSelected(item)
     }
 
     fun startBackfill(source: BackfillSource) {
@@ -87,6 +139,94 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    fun requestSmsPermissions() = requestSmsPermissionsIfNeeded()
+
+    fun hasSmsPermissions(): Boolean = SMS_PERMISSIONS.all {
+        ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+    }
+
+    fun openSettings() {
+        if (isSettingsVisible()) return
+        val settings = SettingsFragment()
+        applyEnter(settings, axis = true)
+        supportFragmentManager.beginTransaction()
+            .add(R.id.fragmentContainer, settings, TAG_SETTINGS)
+            .addToBackStack(TAG_SETTINGS)
+            .commit()
+    }
+
+    fun showBackfillSettingsSheet() {
+        val dialogBinding = DialogBackfillSettingsBinding.inflate(layoutInflater)
+        dialogBinding.lookbackInput.setText(prefs.getBackfillLookbackHours().toString())
+        dialogBinding.maxRowsInput.setText(prefs.getBackfillMaxRows().toString())
+        val dialog = BottomSheetDialog(this, R.style.ThemeOverlay_TMS_BottomSheet)
+        dialog.setContentView(dialogBinding.root)
+        dialogBinding.cancelButton.setOnClickListener { dialog.dismiss() }
+        dialogBinding.saveButton.setOnClickListener {
+            val hours = dialogBinding.lookbackInput.text?.toString()?.toIntOrNull()
+            val rows = dialogBinding.maxRowsInput.text?.toString()?.toIntOrNull()
+            if (hours == null || rows == null) {
+                Snackbar.make(binding.root, R.string.backfill_settings_invalid, Snackbar.LENGTH_LONG).show()
+                return@setOnClickListener
+            }
+            prefs.setBackfillLookbackHours(hours)
+            prefs.setBackfillMaxRows(rows)
+            dialog.dismiss()
+            Snackbar.make(binding.root, R.string.backfill_settings_saved, Snackbar.LENGTH_SHORT).show()
+            (supportFragmentManager.findFragmentByTag(TAG_SETTINGS) as? SettingsFragment)?.onResume()
+        }
+        dialog.show()
+    }
+
+    fun showUpdateManifestUrlSheet() {
+        val dialogBinding = DialogUpdateManifestUrlBinding.inflate(layoutInflater)
+        prefs.getUpdateManifestUrl()?.let { dialogBinding.urlInput.setText(it) }
+        val dialog = BottomSheetDialog(this, R.style.ThemeOverlay_TMS_BottomSheet)
+        dialog.setContentView(dialogBinding.root)
+        dialogBinding.cancelButton.setOnClickListener { dialog.dismiss() }
+        dialogBinding.saveButton.setOnClickListener {
+            val url = dialogBinding.urlInput.text?.toString().orEmpty()
+            prefs.setUpdateManifestUrl(url)
+            dialog.dismiss()
+            Snackbar.make(binding.root, R.string.update_manifest_url_saved, Snackbar.LENGTH_SHORT).show()
+            (supportFragmentManager.findFragmentByTag(TAG_SETTINGS) as? SettingsFragment)?.onResume()
+        }
+        dialog.show()
+    }
+
+    fun requestExportOutbox() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            exportOutbox()
+            return
+        }
+        val granted = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.WRITE_EXTERNAL_STORAGE,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (granted) {
+            exportOutbox()
+        } else {
+            storagePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        }
+    }
+
+    fun checkForUpdates() {
+        val manifestUrl = prefs.getUpdateManifestUrl()
+        if (manifestUrl.isNullOrBlank()) {
+            Snackbar.make(binding.root, R.string.update_manifest_url_not_set, Snackbar.LENGTH_LONG).show()
+            return
+        }
+        Snackbar.make(binding.root, R.string.update_checking, Snackbar.LENGTH_SHORT).show()
+        executor.execute {
+            val result = runCatching {
+                val manifest = UpdateChecker.fetchManifest(manifestUrl)
+                val installedCode = UpdateChecker.getInstalledVersionCode(this)
+                UpdateChecker.compare(installedCode, manifest)
+            }.getOrElse { CompareResult.Error(it.message ?: it.javaClass.simpleName) }
+            runOnUiThread { handleCompareResult(result) }
+        }
+    }
+
     private fun recoverMissedSms() {
         UploadWorker.enqueueAllPending(this)
         if (!hasSmsPermissions()) return
@@ -95,7 +235,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setBackfillLoading(loading: Boolean) {
-        binding.backfillOverlay.visibility = if (loading) View.VISIBLE else View.GONE
+        binding.backfillCard.visibility = if (loading) View.VISIBLE else View.GONE
+        applyBlur(forceDisable = loading)
+    }
+
+    private fun applyBlur(forceDisable: Boolean = backfillRunning.get()) {
+        val enable = !forceDisable && !UiChrome.reduceTransparency(this)
+        UiChrome.setupBlur(binding.toolbarBlur, binding.blurTarget, this, enable)
+        UiChrome.setupBlur(binding.navBlur, binding.blurTarget, this, enable)
+        UiChrome.setupBlur(binding.backfillCard, binding.blurTarget, this, enable && !forceDisable)
     }
 
     private fun showBackfillResult(result: BackfillResult) {
@@ -118,81 +266,71 @@ class MainActivity : AppCompatActivity() {
         Snackbar.make(binding.root, text, Snackbar.LENGTH_LONG).show()
     }
 
-    private fun hasSmsPermissions(): Boolean = SMS_PERMISSIONS.all {
-        ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
-    }
-
-    private fun showToolbarMenu() {
-        PopupMenu(this, binding.toolbar).apply {
-            menu.add(0, MENU_PULL_SMS, 0, R.string.menu_pull_sms)
-            menu.add(0, MENU_BACKFILL_SETTINGS, 1, R.string.menu_backfill_settings)
-            menu.add(0, MENU_EXPORT_OUTBOX, 2, R.string.menu_export_outbox)
-            menu.add(0, MENU_CHECK_UPDATES, 3, R.string.menu_check_updates)
-            menu.add(0, MENU_UPDATE_MANIFEST_URL, 4, R.string.menu_update_manifest_url)
-            setOnMenuItemClickListener { item ->
-                when (item.itemId) {
-                    MENU_PULL_SMS -> {
-                        startBackfill(BackfillSource.MANUAL)
-                        true
-                    }
-                    MENU_BACKFILL_SETTINGS -> {
-                        showBackfillSettingsDialog()
-                        true
-                    }
-                    MENU_EXPORT_OUTBOX -> {
-                        requestExportOutbox()
-                        true
-                    }
-                    MENU_CHECK_UPDATES -> {
-                        checkForUpdates()
-                        true
-                    }
-                    MENU_UPDATE_MANIFEST_URL -> {
-                        showUpdateManifestUrlDialog()
-                        true
-                    }
-                    else -> false
-                }
-            }
-        }.show()
-    }
-
-    private fun showBackfillSettingsDialog() {
-        val dialogBinding = DialogBackfillSettingsBinding.inflate(layoutInflater)
-        dialogBinding.lookbackInput.setText(prefs.getBackfillLookbackHours().toString())
-        dialogBinding.maxRowsInput.setText(prefs.getBackfillMaxRows().toString())
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.backfill_settings_title)
-            .setView(dialogBinding.root)
-            .setPositiveButton(R.string.save) { _, _ ->
-                val hours = dialogBinding.lookbackInput.text?.toString()?.toIntOrNull()
-                val rows = dialogBinding.maxRowsInput.text?.toString()?.toIntOrNull()
-                if (hours == null || rows == null) {
-                    Snackbar.make(binding.root, R.string.backfill_settings_invalid, Snackbar.LENGTH_LONG).show()
-                    return@setPositiveButton
-                }
-                prefs.setBackfillLookbackHours(hours)
-                prefs.setBackfillMaxRows(rows)
-                Snackbar.make(binding.root, R.string.backfill_settings_saved, Snackbar.LENGTH_SHORT).show()
-            }
-            .setNegativeButton(R.string.cancel, null)
-            .show()
-    }
-
-    private fun requestExportOutbox() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            exportOutbox()
-            return
+    private fun showTab(tag: String) {
+        if (isSettingsVisible()) {
+            supportFragmentManager.popBackStack(TAG_SETTINGS, FragmentManager.POP_BACK_STACK_INCLUSIVE)
         }
-        val granted = ContextCompat.checkSelfPermission(
-            this,
-            Manifest.permission.WRITE_EXTERNAL_STORAGE,
-        ) == PackageManager.PERMISSION_GRANTED
-        if (granted) {
-            exportOutbox()
+        selectedTag = tag
+        val tx = supportFragmentManager.beginTransaction()
+        TAB_TAGS.forEach { existing ->
+            val fragment = supportFragmentManager.findFragmentByTag(existing)
+            if (existing == tag) {
+                if (fragment == null) {
+                    val created = createTab(tag)
+                    applyEnter(created)
+                    tx.add(R.id.fragmentContainer, created, tag)
+                } else {
+                    tx.show(fragment)
+                }
+            } else if (fragment != null) {
+                tx.hide(fragment)
+            }
+        }
+        tx.commit()
+        updateChrome()
+    }
+
+    private fun createTab(tag: String): Fragment = when (tag) {
+        TAG_HOME -> HomeFragment()
+        TAG_SERVERS -> ServersFragment()
+        TAG_FILTERS -> FiltersFragment()
+        else -> LogFragment()
+    }
+
+    private fun applyEnter(fragment: Fragment, axis: Boolean = false) {
+        if (UiChrome.reduceMotion(this)) return
+        fragment.enterTransition = if (axis) {
+            MaterialSharedAxis(MaterialSharedAxis.X, true)
         } else {
-            storagePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            MaterialFadeThrough()
         }
+        fragment.returnTransition = if (axis) {
+            MaterialSharedAxis(MaterialSharedAxis.X, false)
+        } else {
+            MaterialFadeThrough()
+        }
+    }
+
+    private fun isSettingsVisible(): Boolean =
+        supportFragmentManager.findFragmentByTag(TAG_SETTINGS) != null
+
+    private fun updateChrome() {
+        val settings = isSettingsVisible()
+        binding.navBlur.visibility = if (settings) View.GONE else View.VISIBLE
+        binding.toolbar.title = when {
+            settings -> getString(R.string.settings)
+            selectedTag == TAG_SERVERS -> getString(R.string.tab_servers)
+            selectedTag == TAG_FILTERS -> getString(R.string.tab_filters)
+            selectedTag == TAG_LOG -> getString(R.string.tab_log)
+            else -> getString(R.string.app_name)
+        }
+        if (settings) {
+            binding.toolbar.setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
+            binding.toolbar.navigationContentDescription = getString(R.string.navigate_up)
+        } else {
+            binding.toolbar.navigationIcon = null
+        }
+        invalidateOptionsMenu()
     }
 
     private fun exportOutbox() {
@@ -217,38 +355,6 @@ class MainActivity : AppCompatActivity() {
                     },
                 )
             }
-        }
-    }
-
-    private fun showUpdateManifestUrlDialog() {
-        val dialogBinding = DialogUpdateManifestUrlBinding.inflate(layoutInflater)
-        prefs.getUpdateManifestUrl()?.let { dialogBinding.urlInput.setText(it) }
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.update_manifest_url_title)
-            .setView(dialogBinding.root)
-            .setPositiveButton(R.string.save) { _, _ ->
-                val url = dialogBinding.urlInput.text?.toString().orEmpty()
-                prefs.setUpdateManifestUrl(url)
-                Snackbar.make(binding.root, R.string.update_manifest_url_saved, Snackbar.LENGTH_SHORT).show()
-            }
-            .setNegativeButton(R.string.cancel, null)
-            .show()
-    }
-
-    private fun checkForUpdates() {
-        val manifestUrl = prefs.getUpdateManifestUrl()
-        if (manifestUrl.isNullOrBlank()) {
-            Snackbar.make(binding.root, R.string.update_manifest_url_not_set, Snackbar.LENGTH_LONG).show()
-            return
-        }
-        Snackbar.make(binding.root, R.string.update_checking, Snackbar.LENGTH_SHORT).show()
-        executor.execute {
-            val result = runCatching {
-                val manifest = UpdateChecker.fetchManifest(manifestUrl)
-                val installedCode = UpdateChecker.getInstalledVersionCode(this)
-                UpdateChecker.compare(installedCode, manifest)
-            }.getOrElse { CompareResult.Error(it.message ?: it.javaClass.simpleName) }
-            runOnUiThread { handleCompareResult(result) }
         }
     }
 
@@ -337,19 +443,16 @@ class MainActivity : AppCompatActivity() {
         if (missing.isNotEmpty()) {
             permissionLauncher.launch(missing.toTypedArray())
         }
-        updatePermissionBanner()
-    }
-
-    private fun updatePermissionBanner() {
-        binding.permissionBanner.visibility = if (hasSmsPermissions()) View.GONE else View.VISIBLE
     }
 
     companion object {
-        private const val MENU_PULL_SMS = 0
-        private const val MENU_BACKFILL_SETTINGS = 1
-        private const val MENU_EXPORT_OUTBOX = 2
-        private const val MENU_CHECK_UPDATES = 3
-        private const val MENU_UPDATE_MANIFEST_URL = 4
+        const val TAG_HOME = "home"
+        const val TAG_SERVERS = "servers"
+        const val TAG_FILTERS = "filters"
+        const val TAG_LOG = "log"
+        const val TAG_SETTINGS = "settings"
+        private const val STATE_TAB = "selected_tab"
+        private val TAB_TAGS = listOf(TAG_HOME, TAG_SERVERS, TAG_FILTERS, TAG_LOG)
 
         private val SMS_PERMISSIONS = arrayOf(
             Manifest.permission.RECEIVE_SMS,

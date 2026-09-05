@@ -11,8 +11,8 @@ android {
         applicationId = "com.trackmyspend.companion"
         minSdk = 26
         targetSdk = 34
-        versionCode = 6
-        versionName = "1.5"
+        versionCode = 7
+        versionName = "2.0"
     }
 
     buildTypes {
@@ -45,11 +45,12 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
-    implementation("androidx.viewpager2:viewpager2:1.0.0")
     implementation("androidx.recyclerview:recyclerview:1.3.2")
     implementation("androidx.fragment:fragment-ktx:1.6.2")
     implementation("androidx.coordinatorlayout:coordinatorlayout:1.2.0")
     implementation("androidx.work:work-runtime-ktx:2.9.0")
+    implementation("androidx.dynamicanimation:dynamicanimation:1.0.0")
+    implementation("com.github.Dimezis:BlurView:version-3.2.0")
 }
 
 // After assembleDebug / assembleRelease, drop the APK where the API serves OTA files.

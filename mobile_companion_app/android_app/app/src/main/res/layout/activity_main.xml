@@ -1,88 +1,91 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="?attr/colorSurface"
+    android:fitsSystemWindows="true">
 
-    <LinearLayout
+    <eightbitlab.com.blurview.BlurTarget
+        android:id="@+id/blurTarget"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="vertical">
+        android:layout_height="match_parent">
+
+        <FrameLayout
+            android:id="@+id/fragmentContainer"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </eightbitlab.com.blurview.BlurTarget>
+
+    <eightbitlab.com.blurview.BlurView
+        android:id="@+id/toolbarBlur"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:background="@drawable/bg_glass"
+        android:elevation="4dp">
 
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
-            android:layout_height="?attr/actionBarSize"
-            android:background="?attr/colorPrimary"
-            app:navigationIcon="@drawable/ic_menu"
-            app:title="@string/app_name"
-            app:titleTextColor="@color/white" />
+            android:layout_height="@dimen/toolbar_height"
+            app:title="@string/app_name" />
+    </eightbitlab.com.blurview.BlurView>
+
+    <eightbitlab.com.blurview.BlurView
+        android:id="@+id/backfillCard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:layout_marginTop="72dp"
+        android:layout_marginHorizontal="16dp"
+        android:background="@drawable/bg_glass"
+        android:clickable="true"
+        android:elevation="6dp"
+        android:focusable="true"
+        android:visibility="gone">
 
         <LinearLayout
-            android:id="@+id/permissionBanner"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
+            android:minHeight="@dimen/touch_min"
             android:orientation="horizontal"
             android:paddingHorizontal="16dp"
-            android:paddingVertical="8dp"
-            android:visibility="gone">
+            android:paddingVertical="12dp">
+
+            <com.google.android.material.progressindicator.CircularProgressIndicator
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:indeterminate="true"
+                app:indicatorSize="24dp"
+                app:trackThickness="3dp" />
 
             <TextView
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
                 android:layout_weight="1"
-                android:text="@string/permission_rationale" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/grantPermissionButton"
-                style="@style/Widget.Material3.Button.TextButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/grant_permission" />
-        </LinearLayout>
-
-        <com.google.android.material.tabs.TabLayout
-            android:id="@+id/tabLayout"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            app:tabMode="fixed" />
-
-        <androidx.viewpager2.widget.ViewPager2
-            android:id="@+id/viewPager"
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1" />
-    </LinearLayout>
-
-    <FrameLayout
-        android:id="@+id/backfillOverlay"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:clickable="true"
-        android:focusable="true"
-        android:visibility="gone"
-        android:background="#66000000">
-
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:gravity="center"
-            android:orientation="vertical"
-            android:padding="24dp">
-
-            <ProgressBar
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:indeterminate="true" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
                 android:text="@string/backfill_loading"
-                android:textColor="@color/white" />
+                android:textAppearance="?attr/textAppearanceTitleMedium"
+                android:textColor="?attr/colorOnSurface" />
         </LinearLayout>
-    </FrameLayout>
+    </eightbitlab.com.blurview.BlurView>
+
+    <eightbitlab.com.blurview.BlurView
+        android:id="@+id/navBlur"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:background="@drawable/bg_glass"
+        android:elevation="4dp">
+
+        <com.google.android.material.bottomnavigation.BottomNavigationView
+            android:id="@+id/bottomNav"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/bottom_nav_height"
+            app:labelVisibilityMode="labeled"
+            app:menu="@menu/menu_bottom_nav" />
+    </eightbitlab.com.blurview.BlurView>
 </FrameLayout>

@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="ShapeAppearance.TMS.ExtraSmall" parent="ShapeAppearance.Material3.Corner.ExtraSmall">
+        <item name="cornerSize">@dimen/shape_xs</item>
+    </style>
+    <style name="ShapeAppearance.TMS.Small" parent="ShapeAppearance.Material3.Corner.Small">
+        <item name="cornerSize">@dimen/shape_sm</item>
+    </style>
+    <style name="ShapeAppearance.TMS.Medium" parent="ShapeAppearance.Material3.Corner.Medium">
+        <item name="cornerSize">@dimen/shape_md</item>
+    </style>
+    <style name="ShapeAppearance.TMS.Large" parent="ShapeAppearance.Material3.Corner.Large">
+        <item name="cornerSize">@dimen/shape_lg</item>
+    </style>
+    <style name="ShapeAppearance.TMS.ExtraLarge" parent="ShapeAppearance.Material3.Corner.ExtraLarge">
+        <item name="cornerSize">@dimen/shape_xl</item>
+    </style>
+
+    <style name="Widget.TMS.Card" parent="Widget.Material3.CardView.Filled">
+        <item name="shapeAppearance">@style/ShapeAppearance.TMS.Large</item>
+        <item name="cardBackgroundColor">?attr/colorSurfaceContainerLow</item>
+        <item name="cardElevation">0dp</item>
+        <item name="strokeWidth">0dp</item>
+    </style>
+
+    <style name="Widget.TMS.Card.Hero" parent="Widget.TMS.Card">
+        <item name="shapeAppearance">@style/ShapeAppearance.TMS.ExtraLarge</item>
+        <item name="cardBackgroundColor">?attr/colorPrimaryContainer</item>
+    </style>
+
+    <style name="Widget.TMS.Button" parent="Widget.Material3.Button">
+        <item name="shapeAppearance">@style/ShapeAppearance.TMS.Medium</item>
+        <item name="android:minHeight">@dimen/touch_min</item>
+    </style>
+
+    <style name="Widget.TMS.Button.Tonal" parent="Widget.Material3.Button.TonalButton">
+        <item name="shapeAppearance">@style/ShapeAppearance.TMS.Medium</item>
+        <item name="android:minHeight">@dimen/touch_min</item>
+    </style>
+
+    <style name="Widget.TMS.Button.Text" parent="Widget.Material3.Button.TextButton">
+        <item name="android:minHeight">@dimen/touch_min</item>
+    </style>
+
+    <style name="Widget.TMS.Fab" parent="Widget.Material3.FloatingActionButton.Primary">
+        <item name="shapeAppearance">@style/ShapeAppearance.TMS.Large</item>
+    </style>
+
+    <style name="Widget.TMS.BottomNav" parent="Widget.Material3.BottomNavigationView">
+        <item name="backgroundTint">@android:color/transparent</item>
+        <item name="itemActiveIndicatorStyle">@style/Widget.TMS.NavIndicator</item>
+        <item name="itemIconTint">@color/nav_item_tint</item>
+        <item name="itemTextColor">@color/nav_item_tint</item>
+        <item name="itemRippleColor">@color/md_primary_container</item>
+        <item name="elevation">0dp</item>
+    </style>
+
+    <style name="Widget.TMS.NavIndicator" parent="Widget.Material3.BottomNavigationView.ActiveIndicator">
+        <item name="android:color">?attr/colorSecondaryContainer</item>
+        <item name="shapeAppearance">@style/ShapeAppearance.TMS.Medium</item>
+    </style>
+
+    <style name="Widget.TMS.Toolbar" parent="Widget.Material3.Toolbar">
+        <item name="android:background">@android:color/transparent</item>
+        <item name="titleTextAppearance">?attr/textAppearanceHeadlineSmall</item>
+        <item name="titleTextColor">?attr/colorOnSurface</item>
+        <item name="subtitleTextColor">?attr/colorOnSurfaceVariant</item>
+        <item name="navigationIconTint">?attr/colorOnSurface</item>
+    </style>
+
+    <style name="Widget.TMS.Snackbar" parent="Widget.Material3.Snackbar">
+        <item name="backgroundTint">?attr/colorSurfaceContainerHigh</item>
+        <item name="shapeAppearance">@style/ShapeAppearance.TMS.Small</item>
+    </style>
+
+    <style name="Widget.TMS.TextInput" parent="Widget.Material3.TextInputLayout.OutlinedBox">
+        <item name="shapeAppearance">@style/ShapeAppearance.TMS.Small</item>
+        <item name="boxStrokeColor">?attr/colorOutline</item>
+    </style>
+
+    <style name="Widget.TMS.Chip" parent="Widget.Material3.Chip.Assist">
+        <item name="chipCornerRadius">@dimen/shape_xs</item>
+        <item name="chipMinHeight">28dp</item>
+        <item name="android:clickable">false</item>
+        <item name="android:checkable">false</item>
+    </style>
+
+    <style name="ThemeOverlay.TMS.BottomSheet" parent="ThemeOverlay.Material3.BottomSheetDialog">
+        <item name="bottomSheetStyle">@style/Widget.TMS.BottomSheet</item>
+    </style>
+
+    <style name="Widget.TMS.BottomSheet" parent="Widget.Material3.BottomSheet">
+        <item name="shapeAppearance">@style/ShapeAppearance.TMS.ExtraLarge</item>
+        <item name="backgroundTint">?attr/colorSurfaceContainer</item>
+    </style>
+</resources>

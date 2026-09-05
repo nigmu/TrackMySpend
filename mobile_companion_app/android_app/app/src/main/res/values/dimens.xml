@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="toolbar_height">64dp</dimen>
+    <dimen name="bottom_nav_height">80dp</dimen>
+    <dimen name="list_padding_top">72dp</dimen>
+    <dimen name="list_padding_bottom">104dp</dimen>
+    <dimen name="touch_min">48dp</dimen>
+    <dimen name="shape_xs">4dp</dimen>
+    <dimen name="shape_sm">8dp</dimen>
+    <dimen name="shape_md">12dp</dimen>
+    <dimen name="shape_lg">20dp</dimen>
+    <dimen name="shape_xl">28dp</dimen>
+</resources>

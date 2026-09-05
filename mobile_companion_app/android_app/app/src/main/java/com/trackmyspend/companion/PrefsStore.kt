@@ -37,6 +37,10 @@ class PrefsStore(context: Context) {
         saveFilters(getFilters().filterNot { it.id == id })
     }
 
+    fun setFilterEnabled(id: String, enabled: Boolean) {
+        saveFilters(getFilters().map { if (it.id == id) it.copy(enabled = enabled) else it })
+    }
+
     fun getServers(): List<ServerConfig> {
         val json = prefs.getString(KEY_SERVERS, "[]") ?: "[]"
         val servers = parseServers(json)

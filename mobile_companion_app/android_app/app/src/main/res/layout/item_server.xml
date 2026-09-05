@@ -1,16 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    style="@style/Widget.TMS.Card"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_margin="4dp"
-    app:cardUseCompatPadding="true">
+    android:layout_margin="6dp">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="12dp">
+        android:padding="16dp">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -20,15 +21,18 @@
 
             <TextView
                 android:id="@+id/priorityText"
-                android:layout_width="32dp"
-                android:layout_height="32dp"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/bg_priority_badge"
                 android:gravity="center"
                 android:textAppearance="?attr/textAppearanceTitleMedium"
-                android:textStyle="bold" />
+                android:textColor="?attr/colorOnPrimaryContainer"
+                tools:text="1" />
 
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
                 android:layout_weight="1"
                 android:orientation="vertical">
 
@@ -37,58 +41,53 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:textAppearance="?attr/textAppearanceTitleMedium"
-                    android:textStyle="bold" />
+                    tools:text="Home" />
 
                 <TextView
                     android:id="@+id/urlText"
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:textAppearance="?attr/textAppearanceBodySmall" />
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textAppearance="?attr/textAppearanceBodySmall"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    tools:text="http://192.168.1.10:2006" />
             </LinearLayout>
+
+            <ImageButton
+                android:id="@+id/overflowButton"
+                android:layout_width="@dimen/touch_min"
+                android:layout_height="@dimen/touch_min"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/server_overflow"
+                android:src="@drawable/ic_more" />
         </LinearLayout>
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="end"
+            android:layout_marginTop="12dp"
+            android:gravity="center_vertical"
             android:orientation="horizontal">
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/moveUpButton"
-                style="@style/Widget.Material3.Button.TextButton"
+            <com.google.android.material.chip.Chip
+                android:id="@+id/statusChip"
+                style="@style/Widget.TMS.Chip"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:contentDescription="@string/move_server_up"
-                android:text="@string/move_up" />
+                android:text="@string/status_unknown" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/moveDownButton"
-                style="@style/Widget.Material3.Button.TextButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:contentDescription="@string/move_server_down"
-                android:text="@string/move_down" />
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/testButton"
-                style="@style/Widget.Material3.Button.TextButton"
+                style="@style/Widget.TMS.Button.Tonal"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/test" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/editButton"
-                style="@style/Widget.Material3.Button.TextButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/edit_server" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/deleteButton"
-                style="@style/Widget.Material3.Button.TextButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/delete" />
         </LinearLayout>
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>
