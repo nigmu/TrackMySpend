@@ -278,7 +278,6 @@ On **macOS** or **Windows**, there is no systemd unit here — keep `python main
 
 ## TMS Companion
 
-The phone app sends SMS to this API. Add a Servers entry for the tunnel and keep it **Active**: `https://server-trackmyspend.nigmulabs.xyz`. Optionally add Tailscale and LAN backups (`http://<host>:2006`).
+The phone app sends SMS to this API. Add the tunnel as the first Servers entry: `https://server-trackmyspend.nigmulabs.xyz`. Optionally add Tailscale and LAN backups (`http://<host>:2006`).
 
-Setup: [mobile_companion_app/README.md](mobile_companion_app/README.md)  
-Build/install: [mobile_companion_app/android_app/README.md](mobile_companion_app/android_app/README.md)
+Setup, features, build, and updates: [mobile_companion_app/README.md](mobile_companion_app/README.md)
