@@ -1,4 +1,5 @@
 from ..core.logging import configure_logging, get_logger
+from ..sms.db import rehash_sms_content_hashes
 from .connection import connect
 from .schema import POST_SCHEMA_STATEMENTS, SCHEMA_STATEMENTS
 
@@ -18,8 +19,13 @@ def migrate() -> None:
         with conn.cursor() as cur:
             for stmt in statements:
                 cur.execute(stmt)
+        deleted = rehash_sms_content_hashes(conn)
         conn.commit()
-        logger.info("migrate complete (%s statements)", len(statements))
+        logger.info(
+            "migrate complete (%s statements, sms rehash deleted_dupes=%s)",
+            len(statements),
+            deleted,
+        )
     except Exception:
         conn.rollback()
         logger.exception("migrate failed")

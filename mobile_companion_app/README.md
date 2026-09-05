@@ -26,7 +26,7 @@ The API is the main TrackMySpend service (`python main.py`, port **2006**). Ther
 - **Background SMS reception:** `SmsReceiver` handles Android's `SMS_RECEIVED` broadcast, joins multipart messages, and records the sender, body, and received time.
 - **Sender filters:** matching uses a case-insensitive sender substring. For example, `HDFCBK` matches a sender such as `VM-HDFCBK`. Filters are stored only on the phone and are separate from the Gmail filters in the web app.
 - **Missed-message recovery:** catch-up is cursor-based, not a blind 48h rescan.
-  - **After saving a server while the outbox is empty** (first install / reinstall): the app GETs `/sms/latest-received-at` for this device (tries servers in priority order), snapshots that time once, then scans the inbox for matching SMS with `DATE >=` that watermark (or the last **X** hours if the DB has no rows). The boundary SMS may re-upload; the server `content_hash` drops duplicates.
+  - **After saving a server while the outbox is empty** (first install / reinstall): the app GETs `/sms/latest-received-at` for this device (tries servers in priority order), snapshots that time once, then scans the inbox for matching SMS with `DATE >=` that watermark (or the last **X** hours if the DB has no rows). The boundary SMS may re-upload; the server `content_hash` (sender+body+device_id) drops duplicates even when `received_at` differs slightly.
   - **On later opens** (outbox already has rows): scan from the max local outbox `receivedAt` only — no server watermark.
   - **Saving a 2nd/3rd server or editing a server** while the outbox is non-empty does **not** re-run watermark backfill.
   - **Manual Pull SMS** (☰ menu): same shared path (watermark if outbox empty, else local cursor). Use this if watermark GET failed on all servers.
@@ -58,7 +58,7 @@ LAN URLs such as `http://<host>:2006` are allowed. Do not add `/sms/ingest`, `/h
 ### API integration
 
 - **SMS ingestion:** `POST /sms/ingest` validates the optional token and writes the message to PostgreSQL table `raw_sms_data`.
-- **Server-side deduplication:** the API hashes the sender, body, received time, and device ID. A unique database index prevents upload retries from creating extra rows.
+- **Server-side deduplication:** the API hashes the sender, body, and device ID. A unique database index prevents upload retries (and PDU vs inbox timestamp skew) from creating extra rows.
 - **Operational events:** accepted, duplicate, and failed ingestion events are recorded in `app_event_logs` and returned by `GET /logs`.
 - **SMS listing:** `GET /sms` returns paginated raw SMS records for the web SMS page.
 

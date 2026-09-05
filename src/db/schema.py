@@ -83,7 +83,7 @@ SCHEMA_STATEMENTS: list[str] = [
     """,
     """
     -- SMS pipeline (src/sms). Stored as received; no transactions link yet.
-    -- content_hash (added below, in POST_SCHEMA_STATEMENTS) dedupes retries.
+    -- content_hash (added below) dedupes on sender+body+device_id (not received_at).
     CREATE TABLE IF NOT EXISTS raw_sms_data (
         id BIGSERIAL PRIMARY KEY,
         sender TEXT,
@@ -154,10 +154,8 @@ POST_SCHEMA_STATEMENTS: list[str] = [
     """
     UPDATE raw_sms_data
     SET content_hash = md5(
-        id::text || E'\\n' ||
         COALESCE(sender, '') || E'\\n' ||
         body || E'\\n' ||
-        COALESCE(received_at::text, '') || E'\\n' ||
         COALESCE(device_id, '')
     )
     WHERE content_hash IS NULL

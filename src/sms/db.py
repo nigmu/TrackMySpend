@@ -13,22 +13,19 @@ logger = get_logger(__name__)
 def sms_content_hash(
     sender: str | None,
     body: str,
-    received_at: datetime | None,
     device_id: str | None,
 ) -> str:
-    """Hash used to dedupe SMS ingest retries.
+    """Hash used to dedupe SMS ingest retries / live-vs-inbox reuploads.
 
     device_id is included so the same text from two different phones is
-    never merged into one row. received_at is included so a phone that
-    resends an old queued message doesn't collide with a new message that
-    happens to have identical sender/body text.
+    never merged into one row. received_at is intentionally excluded:
+    Android PDU time and inbox DATE can differ by ~1s for the same SMS.
+    Financial SMS bodies already carry unique refs (UPI ids, etc.).
     """
-    received = received_at.isoformat() if received_at is not None else ""
     payload = "\n".join(
         [
             (sender or "").strip(),
             body,
-            received,
             (device_id or "").strip(),
         ]
     )
@@ -42,7 +39,7 @@ def insert_sms(
     received_at: datetime | None,
     device_id: str | None,
 ) -> tuple[int, bool]:
-    digest = sms_content_hash(sender, body, received_at, device_id)
+    digest = sms_content_hash(sender, body, device_id)
     row = conn.execute(
         """
         INSERT INTO raw_sms_data (sender, body, received_at, device_id, content_hash)
@@ -60,6 +57,47 @@ def insert_sms(
     ).fetchone()
     assert existing is not None
     return int(existing["id"]), False
+
+
+def rehash_sms_content_hashes(conn: Connection) -> int:
+    """Rewrite content_hash to sender+body+device_id; drop duplicate rows.
+
+    Returns the number of duplicate rows deleted. Safe to run on every migrate.
+    """
+    from collections import defaultdict
+
+    conn.execute("DROP INDEX IF EXISTS idx_raw_sms_data_content_hash")
+    rows = conn.execute(
+        "SELECT id, sender, body, device_id FROM raw_sms_data"
+    ).fetchall()
+    by_hash: dict[str, list[int]] = defaultdict(list)
+    for row in rows:
+        digest = sms_content_hash(row["sender"], row["body"], row["device_id"])
+        by_hash[digest].append(int(row["id"]))
+
+    deleted = 0
+    for digest, ids in by_hash.items():
+        ids.sort()
+        keep, drop = ids[0], ids[1:]
+        if drop:
+            conn.execute("DELETE FROM raw_sms_data WHERE id = ANY(%s)", (drop,))
+            deleted += len(drop)
+        conn.execute(
+            """
+            UPDATE raw_sms_data
+            SET content_hash = %s, updated_at = NOW()
+            WHERE id = %s
+            """,
+            (digest, keep),
+        )
+
+    conn.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_raw_sms_data_content_hash
+            ON raw_sms_data (content_hash)
+        """
+    )
+    return deleted
 
 
 def list_sms(conn: Connection, limit: int = 50, offset: int = 0) -> list[dict]:
@@ -100,9 +138,9 @@ if __name__ == "__main__":
     from unittest.mock import MagicMock
 
     when = dt(2026, 9, 2, 20, 0, tzinfo=UTC)
-    a = sms_content_hash("VM-HDFCBK", "Rs.100 spent", when, "dev1")
-    b = sms_content_hash("VM-HDFCBK", "Rs.100 spent", when, "dev1")
-    c = sms_content_hash("VM-HDFCBK", "Rs.100 spent", when, "dev2")
+    a = sms_content_hash("VM-HDFCBK", "Rs.100 spent", "dev1")
+    b = sms_content_hash("VM-HDFCBK", "Rs.100 spent", "dev1")
+    c = sms_content_hash("VM-HDFCBK", "Rs.100 spent", "dev2")
     assert a == b
     assert a != c
     assert len(a) == 64
