@@ -78,6 +78,7 @@ Table raw_sms_data {
   indexes {
     (processing_status, id) [name: 'idx_raw_sms_data_status_id']
     content_hash [unique, name: 'idx_raw_sms_data_content_hash']
+    received_at [name: 'idx_raw_sms_data_received_at']
   }
 }
 

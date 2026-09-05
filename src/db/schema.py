@@ -168,4 +168,8 @@ POST_SCHEMA_STATEMENTS: list[str] = [
     CREATE UNIQUE INDEX IF NOT EXISTS idx_raw_sms_data_content_hash
         ON raw_sms_data (content_hash)
     """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_raw_sms_data_received_at
+        ON raw_sms_data (received_at DESC NULLS LAST)
+    """,
 ]

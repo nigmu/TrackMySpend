@@ -76,7 +76,7 @@ These filters apply only to Gmail. TMS Companion keeps its SMS filters on the ph
 - `body` is required. The other fields are optional at the API boundary.
 - When `SMS_INGEST_TOKEN` is configured, the request must include the same value in `X-TrackMySpend-Token`.
 - The API hashes the sender, body, and device ID (`content_hash`). A unique index prevents retries and live-vs-inbox reuploads from creating duplicate rows. `received_at` is stored but not part of the hash.
-- `GET /sms` returns the stored raw SMS records.
+- `GET /sms` returns the stored raw SMS records ordered by `received_at` (newest first), not by insert `id`.
 
 See [TMS Companion documentation](mobile_companion_app/README.md) for Android features, setup, delivery retries, and updates.
 

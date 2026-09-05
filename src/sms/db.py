@@ -106,7 +106,7 @@ def list_sms(conn: Connection, limit: int = 50, offset: int = 0) -> list[dict]:
         SELECT id, sender, body, received_at, device_id,
                processing_status, error_message, created_at, updated_at
         FROM raw_sms_data
-        ORDER BY id DESC
+        ORDER BY received_at DESC NULLS LAST, id DESC
         LIMIT %s OFFSET %s
         """,
         (limit, offset),
