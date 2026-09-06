@@ -14,8 +14,6 @@ import androidx.fragment.app.FragmentManager
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
-import com.google.android.material.transition.MaterialFadeThrough
-import com.google.android.material.transition.MaterialSharedAxis
 import com.trackmyspend.companion.databinding.ActivityMainBinding
 import com.trackmyspend.companion.databinding.DialogBackfillSettingsBinding
 import com.trackmyspend.companion.databinding.DialogUpdateManifestUrlBinding
@@ -148,7 +146,6 @@ class MainActivity : AppCompatActivity() {
     fun openSettings() {
         if (isSettingsVisible()) return
         val settings = SettingsFragment()
-        applyEnter(settings, axis = true)
         supportFragmentManager.beginTransaction()
             .add(R.id.fragmentContainer, settings, TAG_SETTINGS)
             .addToBackStack(TAG_SETTINGS)
@@ -243,7 +240,9 @@ class MainActivity : AppCompatActivity() {
         val enable = !forceDisable && !UiChrome.reduceTransparency(this)
         UiChrome.setupBlur(binding.toolbarBlur, binding.blurTarget, this, enable)
         UiChrome.setupBlur(binding.navBlur, binding.blurTarget, this, enable)
-        UiChrome.setupBlur(binding.backfillCard, binding.blurTarget, this, enable && !forceDisable)
+        if (binding.backfillCard.visibility == View.VISIBLE) {
+            UiChrome.setupBlur(binding.backfillCard, binding.blurTarget, this, enable && !forceDisable)
+        }
     }
 
     private fun showBackfillResult(result: BackfillResult) {
@@ -276,9 +275,7 @@ class MainActivity : AppCompatActivity() {
             val fragment = supportFragmentManager.findFragmentByTag(existing)
             if (existing == tag) {
                 if (fragment == null) {
-                    val created = createTab(tag)
-                    applyEnter(created)
-                    tx.add(R.id.fragmentContainer, created, tag)
+                    tx.add(R.id.fragmentContainer, createTab(tag), tag)
                 } else {
                     tx.show(fragment)
                 }
@@ -295,20 +292,6 @@ class MainActivity : AppCompatActivity() {
         TAG_SERVERS -> ServersFragment()
         TAG_FILTERS -> FiltersFragment()
         else -> LogFragment()
-    }
-
-    private fun applyEnter(fragment: Fragment, axis: Boolean = false) {
-        if (UiChrome.reduceMotion(this)) return
-        fragment.enterTransition = if (axis) {
-            MaterialSharedAxis(MaterialSharedAxis.X, true)
-        } else {
-            MaterialFadeThrough()
-        }
-        fragment.returnTransition = if (axis) {
-            MaterialSharedAxis(MaterialSharedAxis.X, false)
-        } else {
-            MaterialFadeThrough()
-        }
     }
 
     private fun isSettingsVisible(): Boolean =

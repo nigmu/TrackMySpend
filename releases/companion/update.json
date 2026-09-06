@@ -1,6 +1,6 @@
 {
-  "version_code": 7,
-  "version_name": "2.0",
-  "apk_url": "https://server-trackmyspend.nigmulabs.xyz/releases/companion-2.0.apk",
-  "changelog": "- New UI for SMS backfill\n- New UI for manual SMS pull\n- New UI for loading overlay"
+  "version_code": 8,
+  "version_name": "2.0.1",
+  "apk_url": "https://server-trackmyspend.nigmulabs.xyz/releases/companion-2.0.1.apk",
+  "changelog": "- Fix crash on launch (Material transition / multidex)"
 }

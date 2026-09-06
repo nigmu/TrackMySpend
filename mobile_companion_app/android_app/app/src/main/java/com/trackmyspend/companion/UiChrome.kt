@@ -1,6 +1,7 @@
 package com.trackmyspend.companion
 
 import android.content.Context
+import android.os.Build
 import android.provider.Settings
 import android.util.TypedValue
 import android.view.MotionEvent
@@ -39,16 +40,28 @@ object UiChrome {
     }
 
     fun setupBlur(blurView: BlurView, target: BlurTarget, context: Context, enabled: Boolean) {
+        val solid = themeColor(context, R.attr.colorSurfaceContainer)
+        val live = enabled &&
+            Build.VERSION.SDK_INT >= 31 &&
+            blurView.visibility == View.VISIBLE &&
+            blurView.width > 0 &&
+            blurView.height > 0
         blurView.outlineProvider = ViewOutlineProvider.BACKGROUND
         blurView.clipToOutline = true
-        val overlay = themeColor(context, R.attr.colorGlassOverlay)
-        val solid = themeColor(context, R.attr.colorSurfaceContainer)
-        blurView.setupWith(target)
-            .setBlurRadius(18f)
-            .setOverlayColor(if (enabled) overlay else solid)
-            .setBlurEnabled(enabled)
-            .setBlurAutoUpdate(enabled)
-        if (!enabled) blurView.setBackgroundColor(solid)
+        if (!live) {
+            blurView.setBackgroundColor(solid)
+            return
+        }
+        try {
+            val overlay = themeColor(context, R.attr.colorGlassOverlay)
+            blurView.setupWith(target)
+                .setBlurRadius(18f)
+                .setOverlayColor(overlay)
+                .setBlurEnabled(true)
+                .setBlurAutoUpdate(true)
+        } catch (_: Exception) {
+            blurView.setBackgroundColor(solid)
+        }
     }
 
     fun attachSpringPress(view: View) {
