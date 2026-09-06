@@ -18,14 +18,14 @@
 
     <style name="Widget.TMS.Card" parent="Widget.Material3.CardView.Filled">
         <item name="shapeAppearance">@style/ShapeAppearance.TMS.Large</item>
-        <item name="cardBackgroundColor">?attr/colorSurfaceContainerLow</item>
+        <item name="cardBackgroundColor">@color/md_surface_container_lowest</item>
         <item name="cardElevation">0dp</item>
         <item name="strokeWidth">0dp</item>
     </style>
 
     <style name="Widget.TMS.Card.Hero" parent="Widget.TMS.Card">
         <item name="shapeAppearance">@style/ShapeAppearance.TMS.ExtraLarge</item>
-        <item name="cardBackgroundColor">?attr/colorPrimaryContainer</item>
+        <item name="cardBackgroundColor">?attr/colorPrimary</item>
     </style>
 
     <style name="Widget.TMS.Button" parent="Widget.Material3.Button">
@@ -44,33 +44,42 @@
 
     <style name="Widget.TMS.Fab" parent="Widget.Material3.FloatingActionButton.Primary">
         <item name="shapeAppearance">@style/ShapeAppearance.TMS.Large</item>
+        <item name="backgroundTint">@color/md_primary</item>
+        <item name="tint">@color/md_on_primary</item>
+        <item name="elevation">0dp</item>
+        <item name="hoveredFocusedTranslationZ">0dp</item>
+        <item name="pressedTranslationZ">0dp</item>
     </style>
 
     <style name="Widget.TMS.BottomNav" parent="Widget.Material3.BottomNavigationView">
-        <item name="backgroundTint">@android:color/transparent</item>
+        <item name="backgroundTint">@color/md_surface_container_lowest</item>
         <item name="itemActiveIndicatorStyle">@style/Widget.TMS.NavIndicator</item>
-        <item name="itemIconTint">@color/nav_item_tint</item>
+        <item name="itemIconTint">@color/nav_icon_tint</item>
         <item name="itemTextColor">@color/nav_item_tint</item>
         <item name="itemRippleColor">@color/md_primary_container</item>
         <item name="elevation">0dp</item>
     </style>
 
     <style name="Widget.TMS.NavIndicator" parent="Widget.Material3.BottomNavigationView.ActiveIndicator">
-        <item name="android:color">?attr/colorSecondaryContainer</item>
+        <item name="android:color">@color/md_primary</item>
         <item name="shapeAppearance">@style/ShapeAppearance.TMS.Medium</item>
     </style>
 
     <style name="Widget.TMS.Toolbar" parent="Widget.Material3.Toolbar">
         <item name="android:background">@android:color/transparent</item>
         <item name="titleTextAppearance">?attr/textAppearanceHeadlineSmall</item>
-        <item name="titleTextColor">?attr/colorOnSurface</item>
-        <item name="subtitleTextColor">?attr/colorOnSurfaceVariant</item>
-        <item name="navigationIconTint">?attr/colorOnSurface</item>
+        <item name="titleTextColor">?attr/colorOnPrimaryContainer</item>
+        <item name="subtitleTextColor">?attr/colorOnPrimaryContainer</item>
+        <item name="navigationIconTint">?attr/colorOnPrimaryContainer</item>
     </style>
 
     <style name="Widget.TMS.Snackbar" parent="Widget.Material3.Snackbar">
-        <item name="backgroundTint">?attr/colorSurfaceContainerHigh</item>
+        <item name="backgroundTint">@color/md_inverse_surface</item>
         <item name="shapeAppearance">@style/ShapeAppearance.TMS.Small</item>
+    </style>
+
+    <style name="Widget.TMS.SnackbarText" parent="Widget.Material3.Snackbar.TextView">
+        <item name="android:textColor">@color/md_inverse_on_surface</item>
     </style>
 
     <style name="Widget.TMS.TextInput" parent="Widget.Material3.TextInputLayout.OutlinedBox">
@@ -80,7 +89,7 @@
 
     <style name="Widget.TMS.Chip" parent="Widget.Material3.Chip.Assist">
         <item name="chipCornerRadius">@dimen/shape_xs</item>
-        <item name="chipMinHeight">28dp</item>
+        <item name="chipStrokeWidth">0dp</item>
         <item name="android:clickable">false</item>
         <item name="android:checkable">false</item>
     </style>

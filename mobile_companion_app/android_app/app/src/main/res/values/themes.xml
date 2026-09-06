@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.TMSCompanion.Base" parent="Theme.Material3.DayNight.NoActionBar">
+    <style name="Theme.TMSCompanion.Base" parent="Theme.Material3.Light.NoActionBar">
         <item name="colorPrimary">@color/md_primary</item>
         <item name="colorOnPrimary">@color/md_on_primary</item>
         <item name="colorPrimaryContainer">@color/md_primary_container</item>
@@ -36,13 +36,11 @@
         <item name="colorOnPending">@color/md_on_pending</item>
         <item name="colorPendingContainer">@color/md_pending_container</item>
         <item name="colorOnPendingContainer">@color/md_on_pending_container</item>
-        <item name="colorGlassOverlay">@color/md_glass_overlay</item>
-        <item name="colorGlassStroke">@color/md_glass_stroke</item>
         <item name="colorSurfaceContainer">@color/md_surface_container</item>
         <item name="colorSurfaceContainerLow">@color/md_surface_container_low</item>
         <item name="colorSurfaceContainerHigh">@color/md_surface_container_high</item>
-        <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:statusBarColor">@color/md_primary_container</item>
+        <item name="android:navigationBarColor">@color/md_surface_container_lowest</item>
         <item name="android:windowBackground">@color/md_background</item>
         <item name="shapeAppearanceCornerExtraSmall">@style/ShapeAppearance.TMS.ExtraSmall</item>
         <item name="shapeAppearanceCornerSmall">@style/ShapeAppearance.TMS.Small</item>
@@ -55,13 +53,14 @@
         <item name="bottomNavigationStyle">@style/Widget.TMS.BottomNav</item>
         <item name="bottomSheetDialogTheme">@style/ThemeOverlay.TMS.BottomSheet</item>
         <item name="snackbarStyle">@style/Widget.TMS.Snackbar</item>
+        <item name="snackbarTextViewStyle">@style/Widget.TMS.SnackbarText</item>
         <item name="textInputStyle">@style/Widget.TMS.TextInput</item>
         <item name="chipStyle">@style/Widget.TMS.Chip</item>
         <item name="toolbarStyle">@style/Widget.TMS.Toolbar</item>
     </style>
 
     <style name="Theme.TMSCompanion" parent="Theme.TMSCompanion.Base">
-        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar">true</item>
     </style>
 </resources>

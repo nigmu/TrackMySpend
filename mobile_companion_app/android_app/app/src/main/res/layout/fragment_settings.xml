@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="?attr/colorSurface"
@@ -23,7 +24,8 @@
             android:layout_height="wrap_content"
             android:clickable="true"
             android:focusable="true"
-            android:minHeight="@dimen/touch_min">
+            android:minHeight="@dimen/touch_min"
+            app:cardBackgroundColor="?attr/colorPrimaryContainer">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -35,7 +37,8 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/settings_manifest_title"
-                    android:textAppearance="?attr/textAppearanceTitleMedium" />
+                    android:textAppearance="?attr/textAppearanceTitleMedium"
+                    android:textColor="?attr/colorOnPrimaryContainer" />
 
                 <TextView
                     android:id="@+id/manifestSubtitle"
@@ -44,7 +47,7 @@
                     android:layout_marginTop="4dp"
                     android:text="@string/settings_manifest_subtitle"
                     android:textAppearance="?attr/textAppearanceBodySmall"
-                    android:textColor="?attr/colorOnSurfaceVariant" />
+                    android:textColor="?attr/colorOnPrimaryContainer" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -56,7 +59,8 @@
             android:layout_marginTop="12dp"
             android:clickable="true"
             android:focusable="true"
-            android:minHeight="@dimen/touch_min">
+            android:minHeight="@dimen/touch_min"
+            app:cardBackgroundColor="?attr/colorTertiaryContainer">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -68,7 +72,8 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/settings_backfill_title"
-                    android:textAppearance="?attr/textAppearanceTitleMedium" />
+                    android:textAppearance="?attr/textAppearanceTitleMedium"
+                    android:textColor="?attr/colorOnTertiaryContainer" />
 
                 <TextView
                     android:id="@+id/backfillSubtitle"
@@ -76,7 +81,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
                     android:textAppearance="?attr/textAppearanceBodySmall"
-                    android:textColor="?attr/colorOnSurfaceVariant" />
+                    android:textColor="?attr/colorOnTertiaryContainer" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -88,7 +93,8 @@
             android:layout_marginTop="12dp"
             android:clickable="true"
             android:focusable="true"
-            android:minHeight="@dimen/touch_min">
+            android:minHeight="@dimen/touch_min"
+            app:cardBackgroundColor="?attr/colorSecondaryContainer">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -100,7 +106,8 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/settings_export_title"
-                    android:textAppearance="?attr/textAppearanceTitleMedium" />
+                    android:textAppearance="?attr/textAppearanceTitleMedium"
+                    android:textColor="?attr/colorOnSecondaryContainer" />
 
                 <TextView
                     android:layout_width="wrap_content"
@@ -108,7 +115,7 @@
                     android:layout_marginTop="4dp"
                     android:text="@string/settings_export_subtitle"
                     android:textAppearance="?attr/textAppearanceBodySmall"
-                    android:textColor="?attr/colorOnSurfaceVariant" />
+                    android:textColor="?attr/colorOnSecondaryContainer" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

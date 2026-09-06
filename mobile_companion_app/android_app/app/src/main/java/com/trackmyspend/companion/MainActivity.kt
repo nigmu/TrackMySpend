@@ -95,7 +95,6 @@ class MainActivity : AppCompatActivity() {
         binding.bottomNav.selectedItemId = navId
         navReady = true
 
-        binding.root.post { applyBlur() }
         requestSmsPermissionsIfNeeded()
         recoverMissedSms()
     }
@@ -233,16 +232,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun setBackfillLoading(loading: Boolean) {
         binding.backfillCard.visibility = if (loading) View.VISIBLE else View.GONE
-        applyBlur(forceDisable = loading)
-    }
-
-    private fun applyBlur(forceDisable: Boolean = backfillRunning.get()) {
-        val enable = !forceDisable && !UiChrome.reduceTransparency(this)
-        UiChrome.setupBlur(binding.toolbarBlur, binding.blurTarget, this, enable)
-        UiChrome.setupBlur(binding.navBlur, binding.blurTarget, this, enable)
-        if (binding.backfillCard.visibility == View.VISIBLE) {
-            UiChrome.setupBlur(binding.backfillCard, binding.blurTarget, this, enable && !forceDisable)
-        }
     }
 
     private fun showBackfillResult(result: BackfillResult) {

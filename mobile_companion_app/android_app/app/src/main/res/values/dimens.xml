@@ -7,7 +7,7 @@
     <dimen name="touch_min">48dp</dimen>
     <dimen name="shape_xs">4dp</dimen>
     <dimen name="shape_sm">8dp</dimen>
-    <dimen name="shape_md">12dp</dimen>
-    <dimen name="shape_lg">20dp</dimen>
-    <dimen name="shape_xl">28dp</dimen>
+    <dimen name="shape_md">14dp</dimen>
+    <dimen name="shape_lg">16dp</dimen>
+    <dimen name="shape_xl">20dp</dimen>
 </resources>

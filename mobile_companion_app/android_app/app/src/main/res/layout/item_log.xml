@@ -57,7 +57,7 @@
                 android:gravity="center"
                 android:paddingHorizontal="8dp"
                 android:textAppearance="?attr/textAppearanceLabelSmall"
-                android:textColor="?attr/colorOnSurface"
+                android:textColor="?attr/colorOnPendingContainer"
                 tools:text="2" />
         </LinearLayout>
 

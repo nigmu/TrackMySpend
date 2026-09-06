@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     style="@style/Widget.TMS.Card"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_margin="6dp">
+    android:layout_margin="6dp"
+    app:cardBackgroundColor="?attr/colorSecondaryContainer">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -27,6 +29,7 @@
                 android:layout_height="wrap_content"
                 android:fontFamily="monospace"
                 android:textAppearance="?attr/textAppearanceTitleMedium"
+                android:textColor="?attr/colorOnSecondaryContainer"
                 tools:text="HDFCBK" />
 
             <TextView
@@ -35,7 +38,7 @@
                 android:layout_height="wrap_content"
                 android:text="@string/filter_enabled"
                 android:textAppearance="?attr/textAppearanceLabelMedium"
-                android:textColor="?attr/colorOnSurfaceVariant" />
+                android:textColor="?attr/colorOnSecondaryContainer" />
         </LinearLayout>
 
         <com.google.android.material.materialswitch.MaterialSwitch

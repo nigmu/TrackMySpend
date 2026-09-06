@@ -2,6 +2,6 @@
 <resources>
     <style name="Theme.TMSCompanion" parent="Theme.TMSCompanion.Base">
         <item name="android:windowLightStatusBar">false</item>
-        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowLightNavigationBar">true</item>
     </style>
 </resources>

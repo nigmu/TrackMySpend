@@ -7,42 +7,34 @@
     android:background="?attr/colorSurface"
     android:fitsSystemWindows="true">
 
-    <eightbitlab.com.blurview.BlurTarget
-        android:id="@+id/blurTarget"
+    <FrameLayout
+        android:id="@+id/fragmentContainer"
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="match_parent" />
 
-        <FrameLayout
-            android:id="@+id/fragmentContainer"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent" />
-    </eightbitlab.com.blurview.BlurTarget>
-
-    <eightbitlab.com.blurview.BlurView
+    <FrameLayout
         android:id="@+id/toolbarBlur"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="top"
-        android:background="@drawable/bg_glass"
-        android:elevation="4dp">
+        android:background="?attr/colorPrimaryContainer">
 
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
             android:layout_height="@dimen/toolbar_height"
             app:title="@string/app_name" />
-    </eightbitlab.com.blurview.BlurView>
+    </FrameLayout>
 
-    <eightbitlab.com.blurview.BlurView
+    <FrameLayout
         android:id="@+id/backfillCard"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="top"
         android:layout_marginTop="72dp"
         android:layout_marginHorizontal="16dp"
-        android:background="@drawable/bg_glass"
+        android:background="@drawable/bg_chrome_card"
         android:clickable="true"
-        android:elevation="6dp"
         android:focusable="true"
         android:visibility="gone">
 
@@ -69,17 +61,16 @@
                 android:layout_weight="1"
                 android:text="@string/backfill_loading"
                 android:textAppearance="?attr/textAppearanceTitleMedium"
-                android:textColor="?attr/colorOnSurface" />
+                android:textColor="?attr/colorOnTertiaryContainer" />
         </LinearLayout>
-    </eightbitlab.com.blurview.BlurView>
+    </FrameLayout>
 
-    <eightbitlab.com.blurview.BlurView
+    <FrameLayout
         android:id="@+id/navBlur"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
-        android:background="@drawable/bg_glass"
-        android:elevation="4dp">
+        android:background="?attr/colorSurfaceContainerLowest">
 
         <com.google.android.material.bottomnavigation.BottomNavigationView
             android:id="@+id/bottomNav"
@@ -87,5 +78,5 @@
             android:layout_height="@dimen/bottom_nav_height"
             app:labelVisibilityMode="labeled"
             app:menu="@menu/menu_bottom_nav" />
-    </eightbitlab.com.blurview.BlurView>
+    </FrameLayout>
 </FrameLayout>

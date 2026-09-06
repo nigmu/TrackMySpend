@@ -8,8 +8,6 @@
     <attr name="colorOnPending" format="color" />
     <attr name="colorPendingContainer" format="color" />
     <attr name="colorOnPendingContainer" format="color" />
-    <attr name="colorGlassOverlay" format="color" />
-    <attr name="colorGlassStroke" format="color" />
     <attr name="colorSurfaceContainer" format="color" />
     <attr name="colorSurfaceContainerLow" format="color" />
     <attr name="colorSurfaceContainerHigh" format="color" />
