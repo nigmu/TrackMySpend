@@ -3,6 +3,7 @@ from pathlib import Path
 
 from fastapi import APIRouter
 
+from ..core.config import API_PUBLIC_BASE
 from ..core.logging import get_logger
 from ..logs.db import insert_event_log
 
@@ -11,6 +12,19 @@ router = APIRouter(tags=["TMS Companion"])
 
 RELEASES_DIR = Path(__file__).resolve().parents[2] / "releases" / "companion"
 UPDATE_JSON = RELEASES_DIR / "update.json"
+
+
+def resolve_apk_url(apk_url: str, api_public_base: str) -> str:
+    """Path in update.json; full URL returned to the phone. Absolute URLs pass through."""
+    raw = apk_url.strip()
+    if not raw or "://" in raw:
+        return raw
+    return f"{api_public_base.rstrip('/')}/{raw.lstrip('/')}"
+
+
+def _with_public_apk_url(data: dict) -> dict:
+    data["apk_url"] = resolve_apk_url(str(data.get("apk_url") or ""), API_PUBLIC_BASE)
+    return data
 
 
 def _fallback_manifest() -> dict:
@@ -36,7 +50,7 @@ def app_update():
             "TMS Companion update manifest missing; serving fallback",
             severity="warning",
         )
-        return _fallback_manifest()
+        return _with_public_apk_url(_fallback_manifest())
     try:
         data = json.loads(UPDATE_JSON.read_text(encoding="utf-8"))
     except Exception:
@@ -47,7 +61,7 @@ def app_update():
             "TMS Companion update manifest unreadable; serving fallback",
             severity="error",
         )
-        return _fallback_manifest()
+        return _with_public_apk_url(_fallback_manifest())
     logger.info(
         "companion manifest served version_code=%s version_name=%s",
         data.get("version_code"),
@@ -62,4 +76,4 @@ def app_update():
             "version_name": data.get("version_name"),
         },
     )
-    return data
+    return _with_public_apk_url(data)

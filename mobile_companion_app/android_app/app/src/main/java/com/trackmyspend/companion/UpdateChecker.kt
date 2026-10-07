@@ -28,8 +28,8 @@ object UpdateChecker {
 
     private const val APK_FILE_NAME = "companion-update.apk"
 
-    fun fetchManifest(url: String): UpdateManifest {
-        val conn = openGet(url.trim())
+    fun fetchManifest(url: String, timeoutMs: Int = 15_000): UpdateManifest {
+        val conn = openGet(url.trim(), timeoutMs, timeoutMs)
         val code = conn.responseCode
         val body = readStream(if (code in 200..299) conn.inputStream else conn.errorStream)
         conn.disconnect()
@@ -68,7 +68,7 @@ object UpdateChecker {
     fun downloadApk(url: String, cacheDir: File): File {
         val updatesDir = File(cacheDir, "updates").apply { mkdirs() }
         val apkFile = File(updatesDir, APK_FILE_NAME)
-        val conn = openGet(url.trim())
+        val conn = openGet(url.trim(), 15_000, 60_000)
         val code = conn.responseCode
         if (code !in 200..299) {
             val err = readStream(conn.errorStream)
@@ -96,11 +96,11 @@ object UpdateChecker {
         context.startActivity(intent)
     }
 
-    private fun openGet(urlString: String): HttpURLConnection {
+    private fun openGet(urlString: String, connectTimeoutMs: Int, readTimeoutMs: Int): HttpURLConnection {
         val conn = URL(urlString).openConnection() as HttpURLConnection
         conn.requestMethod = "GET"
-        conn.connectTimeout = 15_000
-        conn.readTimeout = 60_000
+        conn.connectTimeout = connectTimeoutMs
+        conn.readTimeout = readTimeoutMs
         return conn
     }
 

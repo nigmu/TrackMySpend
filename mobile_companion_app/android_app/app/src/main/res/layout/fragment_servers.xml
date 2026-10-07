@@ -10,7 +10,7 @@
         android:layout_height="match_parent"
         android:clipToPadding="false"
         android:paddingTop="@dimen/list_padding_top"
-        android:paddingBottom="@dimen/list_padding_bottom"
+        android:paddingBottom="176dp"
         android:paddingHorizontal="12dp" />
 
     <LinearLayout
@@ -61,7 +61,17 @@
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|end"
         android:layout_marginEnd="16dp"
-        android:layout_marginBottom="96dp"
+        android:layout_marginBottom="160dp"
         android:contentDescription="@string/add_server"
         app:srcCompat="@drawable/ic_add" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/updateAppButton"
+        style="@style/Widget.TMS.Button.Tonal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginBottom="88dp"
+        android:text="@string/update_app" />
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

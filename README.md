@@ -104,7 +104,7 @@ The sidebar's **API base** field can temporarily point the UI at another API ser
 
 ### Companion updates
 
-- `GET /app/update.json` serves `releases/companion/update.json`.
+- `GET /app/update.json` serves `releases/companion/update.json`. `apk_url` in that file is a path; the response prefixes `API_PUBLIC_BASE`.
 - `GET /releases/{filename}` serves APK files from `releases/companion/`.
 - A missing or malformed manifest produces a safe fallback and an event-log entry.
 
@@ -142,7 +142,7 @@ The sidebar's **API base** field can temporarily point the UI at another API ser
 
 ### Android updates
 
-- `GET /app/update.json` — return the Android update manifest.
+- `GET /app/update.json` — return the Android update manifest. A path in `apk_url` is prefixed with `API_PUBLIC_BASE`.
 - `GET /releases/{filename}` — download a published APK.
 
 `GET /mails`, `GET /transactions`, `GET /sms`, and `GET /logs` accept `limit` and `offset`. The default limit is 50 and the maximum is 200.
@@ -277,15 +277,10 @@ Use a registered public hostname or localhost for OAuth. Google does not accept 
 
 ## Network access
 
-Default local addresses:
+Local addresses:
 
 - API: `http://localhost:2006`
 - UI: `http://localhost:2007`
-
-Configured public addresses:
-
-- API: `https://server-trackmyspend.nigmulabs.xyz`
-- UI: `https://trackmyspend.nigmulabs.xyz`
 
 `localhost` works only on the same machine. Other devices must use a LAN, Tailscale, or public address. Add every browser UI origin to `CORS_EXTRA_ORIGINS`.
 

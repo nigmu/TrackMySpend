@@ -67,7 +67,7 @@ LAN URLs such as `http://<host>:2006` are allowed. Do not add `/sms/ingest`, `/h
 - **Configurable manifest:** **☰ → Update manifest URL…** saves or clears the update-manifest address.
 - **Manual checks only:** the app never checks automatically. **☰ → Check for updates** requests the saved manifest.
 - **Upgrade and downgrade detection:** the app compares `version_code`, shows the installed and available versions, includes the changelog, and warns before a downgrade.
-- **Update hosting:** `GET /app/update.json` serves `releases/companion/update.json`. APKs under `releases/companion/` are served by `GET /releases/<filename>`.
+- **Update hosting:** `GET /app/update.json` serves `releases/companion/update.json`. `apk_url` there is a path such as `/releases/companion-2.0.2.apk`; the response prefixes `API_PUBLIC_BASE`. APKs under `releases/companion/` are served by `GET /releases/<filename>`.
 - **Automatic APK copy:** assembling a debug or release APK automatically copies it to `releases/companion/companion-<version>.apk`.
 
 ## API routes
@@ -78,7 +78,7 @@ LAN URLs such as `http://<host>:2006` are allowed. Do not add `/sms/ingest`, `/h
 - `GET /sms` — list stored SMS records.
 - `GET /logs` — list operational events.
 - `POST /logs/event` — companion backfill / ops events (requires ingest token when configured).
-- `GET /app/update.json` — return the companion update manifest.
+- `GET /app/update.json` — return the companion update manifest. A path in `apk_url` is prefixed with `API_PUBLIC_BASE`.
 - `GET /releases/<filename>` — download a published APK.
 
 ## Run the API
@@ -103,7 +103,7 @@ python -m src.db.migrate
 python main.py
 ```
 
-Check `https://server-trackmyspend.nigmulabs.xyz/health`. The expected response is:
+Check `http://localhost:2006/health`. The expected response is:
 
 ```json
 {"status":"ok"}
@@ -148,7 +148,7 @@ On the phone:
 1. Grant `RECEIVE_SMS` and `READ_SMS` when requested.
 2. In **Filters**, add a sender pattern such as `HDFCBK`.
 3. In **Servers**, add a base URL without a route or trailing slash:
-   - Primary: `https://server-trackmyspend.nigmulabs.xyz`
+   - Primary: `http://localhost:2006`
    - Optional backups: Tailscale or `http://<host>:2006`
 4. Move the preferred server to the first position.
 5. If the API has `SMS_INGEST_TOKEN`, enter the same token. Otherwise leave it blank.
@@ -172,15 +172,15 @@ If an old installation still uses port **2005**, change it to **2006**.
 {
   "version_code": 6,
   "version_name": "1.5",
-  "apk_url": "https://server-trackmyspend.nigmulabs.xyz/releases/companion-1.5.apk",
+  "apk_url": "/releases/companion-1.5.apk",
   "changelog": "- what changed"
 }
 ```
 
-4. On the phone, set the manifest URL to `https://server-trackmyspend.nigmulabs.xyz/app/update.json`.
+4. On the phone, set the manifest URL to `http://localhost:2006/app/update.json`.
 5. Choose **Check for updates**.
 
-The APK URL must be reachable from the phone. The new APK must also use the same signing key as the installed app. Android may ask for permission to install unknown apps.
+The phone downloads `{API_PUBLIC_BASE}` plus that path, so the API host must be reachable from the phone. The new APK must also use the same signing key as the installed app. Android may ask for permission to install unknown apps.
 
 ## Troubleshooting
 
@@ -189,5 +189,5 @@ The APK URL must be reachable from the phone. The new APK must also use the same
 - **SMS is not queued:** grant both SMS permissions and check the sender filter.
 - **API returns 401:** make the phone token match `SMS_INGEST_TOKEN`.
 - **Upload is failed:** open the Log tab for the HTTP status or error, then use **Retry**.
-- **APK download fails:** confirm the manifest's `apk_url` route points to an existing file reachable by the phone.
+- **APK download fails:** confirm the served `apk_url` (API host plus the path in `update.json`) points to an existing file the phone can reach.
 - **App not installed:** use the same signing key and avoid lowering `versionCode`; Android may require uninstalling before a downgrade.

@@ -1,10 +1,16 @@
 package com.trackmyspend.companion
 
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.LinearLayout
 import android.widget.PopupMenu
+import android.widget.TextView
+import java.util.concurrent.Executors
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.bottomsheet.BottomSheetDialog
@@ -13,7 +19,6 @@ import com.google.android.material.snackbar.Snackbar
 import com.trackmyspend.companion.databinding.DialogAddServerBinding
 import com.trackmyspend.companion.databinding.FragmentServersBinding
 import com.trackmyspend.companion.databinding.ItemServerBinding
-import java.util.concurrent.Executors
 
 class ServersFragment : Fragment() {
 
@@ -45,7 +50,9 @@ class ServersFragment : Fragment() {
         binding.recyclerView.adapter = adapter
         binding.fabAdd.setOnClickListener { showAddDialog() }
         binding.emptyAddButton.setOnClickListener { showAddDialog() }
+        binding.updateAppButton.setOnClickListener { showUpdateSources() }
         UiChrome.attachSpringPress(binding.fabAdd)
+        UiChrome.attachSpringPress(binding.updateAppButton)
         refreshList()
     }
 
@@ -152,6 +159,133 @@ class ServersFragment : Fragment() {
         dialog.show()
     }
 
+    private fun showUpdateSources() {
+        val servers = prefs.getServers()
+        if (servers.isEmpty()) {
+            Snackbar.make(binding.root, R.string.update_no_servers, Snackbar.LENGTH_LONG).show()
+            return
+        }
+        showUpdateSourceDialog(servers)
+    }
+
+    private fun showUpdateSourceDialog(servers: List<ServerConfig>) {
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        val box = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(pad, pad / 2, pad, 0)
+        }
+        TextView(requireContext()).apply {
+            setText(R.string.update_sources_hint)
+            setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyMedium)
+            setPadding(0, 0, 0, pad)
+            box.addView(this)
+        }
+        val rows = servers.map { server ->
+            val label = TextView(requireContext()).apply {
+                setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyLarge)
+                setPadding(0, pad / 2, 0, pad)
+                text = getString(R.string.update_source_waiting, server.name, UPDATE_SLICE_SEC)
+            }
+            box.addView(label)
+            UpdateRow(server, label)
+        }
+        val dialog = MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.update_app)
+            .setView(box)
+            .setNegativeButton(R.string.cancel, null)
+            .create()
+        val handler = Handler(Looper.getMainLooper())
+        val pool = Executors.newFixedThreadPool(servers.size)
+        val tick = object : Runnable {
+            override fun run() {
+                if (!dialog.isShowing) return
+                val now = SystemClock.elapsedRealtime()
+                rows.forEach { row ->
+                    val manifest = row.manifest
+                    val error = row.error
+                    row.label.text = when {
+                        manifest != null -> getString(
+                            R.string.update_source_line,
+                            row.server.name,
+                            manifest.versionName,
+                            manifest.apkUrl,
+                        )
+                        error != null -> getString(
+                            R.string.update_source_failed,
+                            row.server.name,
+                            row.server.url.trimEnd('/') + "/app/update.json",
+                            error,
+                        )
+                        else -> {
+                            val left = UPDATE_SLICE_SEC - ((now - row.attemptStart) / 1000).toInt()
+                            getString(R.string.update_source_waiting, row.server.name, left.coerceIn(1, UPDATE_SLICE_SEC))
+                        }
+                    }
+                }
+                handler.postDelayed(this, 200)
+            }
+        }
+        rows.forEach { row ->
+            row.label.setOnClickListener {
+                val manifest = row.manifest
+                if (manifest == null || manifest.apkUrl.isBlank()) {
+                    Snackbar.make(binding.root, R.string.update_source_unavailable, Snackbar.LENGTH_LONG).show()
+                    return@setOnClickListener
+                }
+                dialog.dismiss()
+                (activity as? MainActivity)?.downloadAndInstall(manifest.apkUrl)
+            }
+            pool.execute {
+                val result = runCatching { fetchManifestWithRetries(row) }
+                handler.post {
+                    result.fold(
+                        onSuccess = { row.manifest = it },
+                        onFailure = { error ->
+                            if (error is InterruptedException) return@post
+                            row.error = error.message ?: error.javaClass.simpleName
+                        },
+                    )
+                }
+            }
+        }
+        dialog.setOnDismissListener {
+            pool.shutdownNow()
+            handler.removeCallbacks(tick)
+        }
+        dialog.show()
+        handler.post(tick)
+    }
+
+    private fun fetchManifestWithRetries(row: UpdateRow): UpdateManifest {
+        val url = row.server.url.trimEnd('/') + "/app/update.json"
+        val started = SystemClock.elapsedRealtime()
+        var last: Throwable = IllegalStateException("timed out")
+        while (true) {
+            if (Thread.currentThread().isInterrupted) throw InterruptedException()
+            val now = SystemClock.elapsedRealtime()
+            val left = started + UPDATE_TOTAL_MS - now
+            if (left <= 0) break
+            val slice = minOf(UPDATE_SLICE_MS, left).toInt()
+            row.attemptStart = now
+            try {
+                return UpdateChecker.fetchManifest(url, slice)
+            } catch (error: InterruptedException) {
+                throw error
+            } catch (error: Exception) {
+                last = error
+            }
+            val remain = slice - (SystemClock.elapsedRealtime() - now)
+            if (remain > 0) {
+                try {
+                    Thread.sleep(remain)
+                } catch (_: InterruptedException) {
+                    throw InterruptedException()
+                }
+            }
+        }
+        throw last
+    }
+
     private fun testServer(server: ServerConfig) {
         health[server.id] = HealthStatus.CHECKING
         adapter.notifyDataSetChanged()
@@ -216,5 +350,20 @@ class ServersFragment : Fragment() {
                 itemBinding.urlText.setOnClickListener { onUrlClick(server) }
             }
         }
+    }
+
+    private class UpdateRow(
+        val server: ServerConfig,
+        val label: TextView,
+    ) {
+        @Volatile var manifest: UpdateManifest? = null
+        @Volatile var error: String? = null
+        @Volatile var attemptStart: Long = SystemClock.elapsedRealtime()
+    }
+
+    companion object {
+        private const val UPDATE_SLICE_MS = 3_000L
+        private const val UPDATE_TOTAL_MS = 15_000L
+        private const val UPDATE_SLICE_SEC = 3
     }
 }

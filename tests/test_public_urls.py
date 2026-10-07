@@ -1,4 +1,4 @@
-"""Checks for public URL resolution (LAN fallback vs explicit HTTPS bases)."""
+"""Checks for public URL resolution (LAN fallback vs explicit bases)."""
 
 import unittest
 
@@ -12,25 +12,25 @@ class TestResolvePublicUrls(unittest.TestCase):
         self.assertEqual(ui, "http://homeserver:2007")
         self.assertEqual(redirect, "http://homeserver:2006/auth/gmail/callback")
 
-    def test_explicit_https_bases_win(self):
+    def test_explicit_bases_win(self):
         api, ui, redirect = resolve_public_urls(
             "localhost",
-            "https://server-trackmyspend.nigmulabs.xyz/",
-            "https://trackmyspend.nigmulabs.xyz/",
+            "http://localhost:2006/",
+            "http://localhost:2007/",
         )
-        self.assertEqual(api, "https://server-trackmyspend.nigmulabs.xyz")
-        self.assertEqual(ui, "https://trackmyspend.nigmulabs.xyz")
+        self.assertEqual(api, "http://localhost:2006")
+        self.assertEqual(ui, "http://localhost:2007")
         self.assertEqual(
             redirect,
-            "https://server-trackmyspend.nigmulabs.xyz/auth/gmail/callback",
+            "http://localhost:2006/auth/gmail/callback",
         )
 
     def test_cors_includes_frontend_localhost_and_extras(self):
         origins = cors_allowlist(
-            "https://trackmyspend.nigmulabs.xyz",
+            "http://localhost:2007",
             "http://homeserver:2007, http://tailscale-host:2007",
         )
-        self.assertIn("https://trackmyspend.nigmulabs.xyz", origins)
+        self.assertIn("http://localhost:2007", origins)
         self.assertIn("http://localhost:2007", origins)
         self.assertIn("http://127.0.0.1:2007", origins)
         self.assertIn("http://homeserver:2007", origins)

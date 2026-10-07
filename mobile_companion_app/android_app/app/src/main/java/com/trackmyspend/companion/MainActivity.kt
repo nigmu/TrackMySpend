@@ -378,7 +378,7 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun downloadAndInstall(apkUrl: String) {
+    fun downloadAndInstall(apkUrl: String) {
         Snackbar.make(binding.root, R.string.update_downloading, Snackbar.LENGTH_SHORT).show()
         executor.execute {
             val downloadResult = runCatching {
