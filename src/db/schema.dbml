@@ -82,6 +82,22 @@ Table raw_sms_data {
   }
 }
 
+Table transactions_sms {
+  id bigint [pk, increment]
+  // one ledger row per SMS; points at raw_sms_data.id
+  raw_sms_id bigint [not null, unique, ref: > raw_sms_data.id]
+  kind text [not null, note: 'debit | credit | bill_reminder']
+  // null only for a bill reminder whose SMS has no amount
+  amount_paisa bigint
+  instrument text
+  account_mask text
+  counterparty text
+  reference text
+  occurred_at timestamptz
+  template_name text [not null]
+  created_at timestamptz [not null, default: `now()`]
+}
+
 Table app_event_logs {
   id bigint [pk, increment]
   event_type text [not null]

@@ -3,9 +3,9 @@
 Two independent pipelines, easy to tell apart by table prefix:
   - Mail:  email_accounts, sender_filters, raw_mail_data, transactions, sync_runs
            (raw_mail_data -> transactions is a one-to-one, populated by src/mail/parse.py)
-  - SMS:   raw_sms_data
-           (no transactions link yet — SMS is stored raw; parsing it into
-           transactions is the priority next step for this project, not yet built)
+  - SMS:   raw_sms_data, transactions_sms
+           (raw_sms_data -> transactions_sms is one-to-one via raw_sms_id,
+           written by src/sms/classify.py; POST /sms/ingest does not parse)
   - Shared: app_event_logs (used by both pipelines + TMS Companion OTA)
 """
 
@@ -56,8 +56,8 @@ SCHEMA_STATEMENTS: list[str] = [
         ON raw_mail_data (processing_status, id)
     """,
     """
-    -- Mail-only for now: raw_mail_id is NOT NULL, so every row must come
-    -- from an email. There is no raw_sms_id column; SMS is not parsed yet.
+    -- Mail only. raw_mail_id is NOT NULL, so every row comes from an email.
+    -- SMS ledger rows live in transactions_sms.
     CREATE TABLE IF NOT EXISTS transactions (
         id BIGSERIAL PRIMARY KEY,
         raw_mail_id BIGINT NOT NULL UNIQUE
@@ -82,8 +82,9 @@ SCHEMA_STATEMENTS: list[str] = [
     )
     """,
     """
-    -- SMS pipeline (src/sms). Stored as received; no transactions link yet.
+    -- SMS pipeline (src/sms). Stored as received.
     -- content_hash (added below) dedupes on sender+body+device_id (not received_at).
+    -- Parsed rows go to transactions_sms, not to mail `transactions`.
     CREATE TABLE IF NOT EXISTS raw_sms_data (
         id BIGSERIAL PRIMARY KEY,
         sender TEXT,
@@ -111,6 +112,28 @@ SCHEMA_STATEMENTS: list[str] = [
     """
     CREATE INDEX IF NOT EXISTS idx_app_event_logs_created_at
         ON app_event_logs (created_at DESC, id DESC)
+    """,
+    """
+    -- One SMS, one ledger row. raw_sms_id references raw_sms_data.id.
+    -- amount_paisa is null only for a bill reminder whose text has no amount.
+    -- src/sms classifies; no API route inserts here.
+    CREATE TABLE IF NOT EXISTS transactions_sms (
+        id BIGSERIAL PRIMARY KEY,
+        raw_sms_id BIGINT NOT NULL UNIQUE
+            REFERENCES raw_sms_data (id) ON DELETE CASCADE,
+        kind TEXT NOT NULL CHECK (kind IN ('debit', 'credit', 'bill_reminder')),
+        amount_paisa BIGINT,
+        instrument TEXT,
+        account_mask TEXT,
+        counterparty TEXT,
+        reference TEXT,
+        occurred_at TIMESTAMPTZ,
+        template_name TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CONSTRAINT transactions_sms_amount_present CHECK (
+            amount_paisa IS NOT NULL OR kind = 'bill_reminder'
+        )
+    )
     """,
 ]
 

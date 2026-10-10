@@ -306,6 +306,8 @@ With the virtual environment active:
 python -m unittest discover -s tests -v
 ```
 
+That discover loads the HDFC SMS parser checks in `src/sms/test_hdfc.py`.
+
 Small module self-checks are also available:
 
 ```bash
