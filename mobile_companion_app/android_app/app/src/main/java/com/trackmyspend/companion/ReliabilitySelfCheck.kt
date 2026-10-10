@@ -44,5 +44,36 @@ object ReliabilitySelfCheck {
         val lookback = InboxBackfill.chooseLocalOrLookback(null, 48, now)
         check(lookback == now - 48L * 60L * 60L * 1000L)
         check(InboxBackfill.chooseLocalOrLookback(now - 5_000L, 48, now) == now - 5_000L)
+
+        check(!OtpFilter.isOtpSms(
+            "Spent Rs.61.71 On HDFC Bank Card 6517 At UBER INDIA SYSTEMS PRI On 2026-10-09:21:51:52." +
+                "Not You? To Block+Reissue Call 18002586161/SMS BLOCK CC 6517 to 7308080808",
+        ))
+        check(OtpFilter.isOtpSms(
+            "OTP is 492045 for txn of INR 61.71 at UBER INDIA  on HDFC Bank card ending 6517. " +
+                "Valid till  09:54. Do not share OTP for security reasons",
+        ))
+        check(OtpFilter.isOtpSms("OTP is 026101 for txn of INR 242.72"))
+        check(!OtpFilter.isOtpSms(
+            "Rs.299 without OTP/PIN HDFC Bank Card x6517 At SPOTIFYINDIA On 2026-09-14:02:36:34." +
+                "Not U? Block&Reissue:Call 18002586161/SMS BLOCK CC 6517 to 7308080808",
+        ))
+        check(!OtpFilter.isOtpSms("Rs.100000 without OTP/PIN"))
+        check(!OtpFilter.isOtpSms("Rs. 100000 without OTP/PIN"))
+        check(!OtpFilter.isOtpSms("Rs 100000 without OTP/PIN"))
+        check(!OtpFilter.isOtpSms("Rs100000 without OTP/PIN"))
+        check(!OtpFilter.isOtpSms("INR 100000 without OTP/PIN"))
+        check(!OtpFilter.isOtpSms("INR.100000 without OTP/PIN"))
+        check(!OtpFilter.isOtpSms("INR100000 without OTP/PIN"))
+        check(OtpFilter.isOtpSms("OTP is 492045 for txn of INR 100000"))
+
+        val ignored = message.copy(
+            messageId = "otp",
+            body = OtpFilter.IGNORED_BODY,
+            status = DeliveryStatus.IGNORED,
+        )
+        val decoded = MessageStore.decodeMessages(MessageStore.encodeMessages(listOf(ignored))).single()
+        check(decoded.status == DeliveryStatus.IGNORED)
+        check(decoded.body == OtpFilter.IGNORED_BODY)
     }
 }

@@ -48,6 +48,7 @@
     <string name="status_failed">Failed</string>
     <string name="status_pending">Pending</string>
     <string name="status_sending">Sending</string>
+    <string name="status_otp_ignored">OTP ignored</string>
     <string name="status_unknown">Unknown</string>
     <string name="status_checking">Checking…</string>
     <string name="status_ok">OK</string>

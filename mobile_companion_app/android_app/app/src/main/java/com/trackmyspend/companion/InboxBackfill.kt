@@ -81,6 +81,10 @@ object InboxBackfill {
                 val receivedAt = cursorRows.getLong(dateIdx)
                 if (sender.isEmpty() || body.isEmpty()) continue
                 if (!prefs.matchesAnyFilter(sender)) continue
+                if (OtpFilter.isOtpSms(body)) {
+                    store.insertIgnored(sender, receivedAt)
+                    continue
+                }
                 val message = store.insertIfNew(sender, body, receivedAt) ?: continue
                 UploadWorker.enqueue(appContext, message.messageId)
                 enqueued++

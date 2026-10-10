@@ -14,7 +14,7 @@ The API is the main TrackMySpend service (`python main.py`, port **2006**). Ther
 
 1. Android sends an SMS broadcast to the app. Multipart messages are joined into one message.
 2. The app checks the sender against its local **Filters** list.
-3. A matching message is saved to the durable local outbox before any upload starts.
+3. A matching message is saved to the durable local outbox before any upload starts. An OTP text is not saved. The Log gets a row labeled `OTP ignored` and nothing is uploaded.
 4. WorkManager sends it to `POST /sms/ingest` when a network is available.
 5. The API stores it in `raw_sms_data` and ignores duplicate deliveries.
 6. Delivery details appear in the phone's **Log** tab. Stored messages and server events are available through `GET /sms` and `GET /logs`.
@@ -23,7 +23,7 @@ The API is the main TrackMySpend service (`python main.py`, port **2006**). Ther
 
 ### SMS capture and filtering
 
-- **Background SMS reception:** `SmsReceiver` handles Android's `SMS_RECEIVED` broadcast, joins multipart messages, and records the sender, body, and received time.
+- **Background SMS reception:** `SmsReceiver` handles Android's `SMS_RECEIVED` broadcast, joins multipart messages, and records the sender, body, and received time. An SMS that contains `OTP` and a 6-digit code that is not a `Rs` or `INR` amount is not stored. The outbox row says `OTP ignored`.
 - **Sender filters:** matching uses a case-insensitive sender substring. For example, `HDFCBK` matches a sender such as `VM-HDFCBK`. Filters are stored only on the phone and are separate from the Gmail filters in the web app.
 - **Missed-message recovery:** catch-up is cursor-based, not a blind 48h rescan.
   - **After saving a server while the outbox is empty** (first install / reinstall): the app GETs `/sms/latest-received-at` for this device (tries servers in priority order), snapshots that time once, then scans the inbox for matching SMS with `DATE >=` that watermark (or the last **X** hours if the DB has no rows). The boundary SMS may re-upload; the server `content_hash` (sender+body+device_id) drops duplicates even when `received_at` differs slightly.
@@ -36,7 +36,7 @@ The API is the main TrackMySpend service (`python main.py`, port **2006**). Ther
 ### Reliable delivery
 
 - **Durable outbox:** matching SMS is stored in an atomically written local JSON file. Each entry contains a message ID, sender, body, timestamps, delivery state, attempt count, server, HTTP status, and last error.
-- **Delivery states:** every message is marked `pending`, `sending`, `sent`, or `failed`. An interrupted `sending` entry is restored to `pending` when the app recovers.
+- **Delivery states:** every message is marked `pending`, `sending`, `sent`, `failed`, or `ignored`. An interrupted `sending` entry is restored to `pending` when the app recovers. An `ignored` row is an OTP notice and is never uploaded.
 - **WorkManager uploads:** each message has a unique background job that waits for network connectivity. Interrupted jobs use WorkManager's exponential backoff.
 - **Manual retry:** failed entries show a **Retry** button in the Log tab.
 
@@ -52,8 +52,8 @@ LAN URLs such as `http://<host>:2006` are allowed. Do not add `/sms/ingest`, `/h
 
 ### Logs and export
 
-- **Detailed Log tab:** shows all local outbox entries, newest first. It includes the sender, received time, delivery state, attempts, message ID, accepted time, server URL, HTTP status, and error. SMS bodies are not displayed in this screen.
-- **JSON export:** **☰ → Export messages JSON** writes the complete outbox, including message bodies, to the phone's Downloads folder.
+- **Detailed Log tab:** shows all local outbox entries, newest first. It includes the sender, received time, delivery state, attempts, message ID, accepted time, server URL, HTTP status, and error. SMS bodies are not displayed in this screen. An OTP SMS appears as **OTP ignored**, with no message text and no Retry button.
+- **JSON export:** **☰ → Export messages JSON** writes the complete outbox, including message bodies, to the phone's Downloads folder. An ignored OTP row exports the text `OTP ignored`, not the SMS.
 
 ### API integration
 

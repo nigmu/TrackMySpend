@@ -51,6 +51,11 @@ object StatusPills {
                 MaterialR.attr.colorErrorContainer,
                 MaterialR.attr.colorOnErrorContainer,
             )
+            DeliveryStatus.IGNORED -> Triple(
+                R.string.status_otp_ignored,
+                MaterialR.attr.colorSurfaceVariant,
+                MaterialR.attr.colorOnSurfaceVariant,
+            )
             DeliveryStatus.SENDING, DeliveryStatus.PENDING -> Triple(
                 if (status == DeliveryStatus.SENDING) R.string.status_sending else R.string.status_pending,
                 R.attr.colorPendingContainer,

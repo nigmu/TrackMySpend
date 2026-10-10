@@ -1,6 +1,6 @@
 {
-  "version_code": 10,
-  "version_name": "2.0.3",
-  "apk_url": "/releases/companion-2.0.3.apk",
-  "changelog": "- Light matte UI: punchier blue, green, amber, and red; no blur"
+  "version_code": 11,
+  "version_name": "2.0.4",
+  "apk_url": "/releases/companion-2.0.4.apk",
+  "changelog": "- OTP texts are not uploaded. The Log shows OTP ignored without the message."
 }

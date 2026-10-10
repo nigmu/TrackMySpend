@@ -16,6 +16,7 @@ enum class DeliveryStatus {
     SENDING,
     SENT,
     FAILED,
+    IGNORED,
 }
 
 data class OutboxMessage(
@@ -48,6 +49,27 @@ class MessageStore(context: Context) {
                 sender = sender,
                 body = body,
                 receivedAt = receivedAt,
+            )
+            write(messages + message)
+            return message
+        }
+    }
+
+    /** Log row only. Body is [OtpFilter.IGNORED_BODY], never the SMS text. */
+    fun insertIgnored(sender: String, receivedAtMillis: Long): OutboxMessage? {
+        val receivedAt = formatTime(receivedAtMillis)
+        synchronized(lock) {
+            val messages = read()
+            val body = OtpFilter.IGNORED_BODY
+            if (messages.any { it.sender == sender && it.body == body && it.receivedAt == receivedAt }) {
+                return null
+            }
+            val message = OutboxMessage(
+                messageId = UUID.randomUUID().toString(),
+                sender = sender,
+                body = body,
+                receivedAt = receivedAt,
+                status = DeliveryStatus.IGNORED,
             )
             write(messages + message)
             return message
@@ -109,8 +131,12 @@ class MessageStore(context: Context) {
     fun prepareRetry(messageId: String): Boolean {
         var found = false
         update(messageId) {
-            found = true
-            it.copy(status = DeliveryStatus.PENDING, lastError = null, httpCode = null)
+            if (it.status == DeliveryStatus.IGNORED) {
+                it
+            } else {
+                found = true
+                it.copy(status = DeliveryStatus.PENDING, lastError = null, httpCode = null)
+            }
         }
         return found
     }

@@ -19,7 +19,9 @@ class UploadWorker(appContext: Context, params: WorkerParameters) : Worker(appCo
         val messageId = inputData.getString(KEY_MESSAGE_ID) ?: return Result.failure()
         val store = MessageStore(applicationContext)
         val message = store.get(messageId) ?: return Result.success()
-        if (message.status == DeliveryStatus.SENT) return Result.success()
+        if (message.status == DeliveryStatus.SENT || message.status == DeliveryStatus.IGNORED) {
+            return Result.success()
+        }
 
         val servers = PrefsStore(applicationContext).getServers()
         if (servers.isEmpty()) {
