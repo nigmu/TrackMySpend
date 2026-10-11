@@ -10,7 +10,7 @@ import csv
 import json
 import re
 import unittest
-from datetime import timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -203,14 +203,8 @@ class TestHdfcSmsParser(unittest.TestCase):
             self.assertIsNotNone(ledger.instrument)
             if category_id == "credit_card_statement":
                 self.assertIsNone(ledger.amount_paisa)
-                self.assertIsNone(ledger.occurred_at)
             else:
                 self.assertIsNotNone(ledger.amount_paisa)
-            if category_id == "credit_card_upi_txn":
-                self.assertIsNone(ledger.occurred_at)
-            elif category_id != "credit_card_statement":
-                self.assertIsNotNone(ledger.occurred_at)
-                self.assertEqual(ledger.occurred_at.utcoffset(), timedelta(hours=5, minutes=30))
             if category_id == "emandate_upcoming":
                 self.assertIsNone(ledger.account_mask)
             else:
@@ -248,30 +242,27 @@ class TestHdfcSmsParser(unittest.TestCase):
             inr_dot = re.search(r"(INR\.[\d,]+\.\d+)", body)
             if inr_dot:
                 self.assertEqual(ledger.amount_paisa, parse_amount_paisa(inr_dot.group(1)))
-            if "26/SEP/2026_value Date 25/SEP/2026" in body:
-                self.assertEqual(ledger.occurred_at.day, 26)
-                self.assertEqual(ledger.occurred_at.month, 9)
-            if "Spent Rs.255.5" in body:
-                when = ledger.occurred_at
-                self.assertEqual((when.year, when.month, when.day, when.hour, when.minute, when.second), (2026, 10, 7, 20, 54, 25))
-            if "On 1-10-2026" in body:
-                self.assertEqual((ledger.occurred_at.year, ledger.occurred_at.month, ledger.occurred_at.day), (2026, 10, 1))
 
     def test_apply_inserts_ledger_or_only_status(self):
         by_id = {}
         for category_id, json_kind, body in SAMPLES:
             by_id.setdefault(category_id, (json_kind, body))
 
+        when = datetime(2026, 10, 11, 8, 30, tzinfo=UTC)
         conn = MagicMock()
+        conn.execute.return_value.fetchone.return_value = {"received_at": when}
         debit = classify_sms(by_id["upi_debit"][1])
         apply_sms_classification(conn, 7, debit)
-        insert_sql, insert_params = conn.execute.call_args_list[0].args
+        select_sql = conn.execute.call_args_list[0].args[0]
+        self.assertIn("SELECT received_at FROM raw_sms_data", select_sql)
+        insert_sql, insert_params = conn.execute.call_args_list[1].args
         self.assertIn("INSERT INTO transactions_sms", insert_sql)
+        self.assertIn("sms_received_at", insert_sql)
         self.assertEqual(insert_params[0], 7)
         self.assertEqual(insert_params[1], "debit")
         self.assertEqual(insert_params[2], debit.ledger.amount_paisa)
-        self.assertNotEqual(insert_params[2], None)
-        update_sql, update_params = conn.execute.call_args_list[1].args
+        self.assertEqual(insert_params[7], when)
+        update_sql, update_params = conn.execute.call_args_list[2].args
         self.assertIn("UPDATE raw_sms_data", update_sql)
         self.assertEqual(update_params, ("done", 7))
 
@@ -294,10 +285,10 @@ class TestHdfcSmsParser(unittest.TestCase):
         conn.reset_mock()
         reminder = classify_sms(by_id["credit_card_statement"][1])
         apply_sms_classification(conn, 10, reminder)
-        _sql, params = conn.execute.call_args_list[0].args
+        _sql, params = conn.execute.call_args_list[1].args
         self.assertEqual(params[1], "bill_reminder")
         self.assertIsNone(params[2])
-        self.assertEqual(conn.execute.call_args_list[1].args[1], ("done", 10))
+        self.assertEqual(conn.execute.call_args_list[2].args[1], ("done", 10))
 
     def test_csv_counts_match_categories_when_export_is_present(self):
         if not _CSV.is_file():

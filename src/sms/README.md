@@ -41,7 +41,7 @@ Mail `transactions` stays mail-only. Parsed SMS rows go to `transactions_sms`.
 
 `raw_sms_id` is `BIGINT NOT NULL UNIQUE REFERENCES raw_sms_data (id) ON DELETE CASCADE`. One ledger row per SMS. Deleting the raw row deletes the ledger row.
 
-Columns: `kind` (`debit`, `credit`, or `bill_reminder`), `amount_paisa`, `instrument`, `account_mask`, `counterparty`, `reference`, `occurred_at`, `template_name`, plus `id` and `created_at`. `kind` keeps a reminder out of spend totals. `template_name` is the category id from `samples/hdfc_categories.json`.
+Columns: `kind` (`debit`, `credit`, or `bill_reminder`), `amount_paisa`, `instrument`, `account_mask`, `counterparty`, `reference`, `sms_received_at`, `template_name`, plus `id` and `created_at`. `kind` keeps a reminder out of spend totals. `template_name` is the category id from `samples/hdfc_categories.json`. `sms_received_at` is copied from `raw_sms_data.received_at` when the ledger row is written. The parser does not read a date or a clock from the SMS body.
 
 `amount_paisa` is null only for a reminder whose SMS has no amount (`credit_card_statement`). A debit or a credit always has an amount. The check constraint matches that.
 
@@ -51,7 +51,7 @@ JSON kind `reminder` is stored as `bill_reminder`. JSON kinds `ignore` and `info
 
 `parse_amount_paisa` in `src/sms/amount.py` runs on the amount span the template captured, not on the whole SMS, and not via `src/core/amount.py`. An available balance or credit limit is not the transaction. If that span does not parse, the raw row is `unmatched` and later templates do not run.
 
-`account_mask` is the account or card ending as the SMS writes it (`*3826`, `3826`, `XX3826`, `6517`, `x6517`). `occurred_at` is India time at a fixed offset of +05:30. A date with no clock is midnight. `credit_card_upi_txn` only has day and month (`On 02-10`), so `occurred_at` is null rather than a guessed year. `credit_card_statement` has no date. An online card payment uses the `On` date, not the value date. Month abbreviations in these SMS are uppercase (`SEP`, `OCT`).
+`account_mask` is the account or card ending as the SMS writes it (`*3826`, `3826`, `XX3826`, `6517`, `x6517`).
 
 Instruments: `upi` for a UPI send, receive, mandate debit, or e-mandate reminder; `credit_card` for card templates; `account` for salary; `rd` for the recurring-deposit reminder. Card bill payments name no payer, so `counterparty` is null. The e-mandate reminder names no account, so `account_mask` is null. Salary `counterparty` is the ACH narration, and that template requires the letters `SALARY` in the narration. The deposited amount is the transaction. `Avl bal` is not.
 

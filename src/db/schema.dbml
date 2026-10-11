@@ -93,7 +93,8 @@ Table transactions_sms {
   account_mask text
   counterparty text
   reference text
-  occurred_at timestamptz
+  // copied from raw_sms_data.received_at when the ledger row is written
+  sms_received_at timestamptz
   template_name text [not null]
   created_at timestamptz [not null, default: `now()`]
 }

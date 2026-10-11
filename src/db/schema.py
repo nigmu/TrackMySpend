@@ -115,7 +115,9 @@ SCHEMA_STATEMENTS: list[str] = [
     """,
     """
     -- One SMS, one ledger row. raw_sms_id references raw_sms_data.id.
-    -- amount_paisa is null only for a bill reminder whose text has no amount.
+    -- sms_received_at is copied from raw_sms_data.received_at when the row is
+    -- written. The SMS body is not parsed for a date. amount_paisa is null
+    -- only for a bill reminder whose text has no amount.
     -- src/sms classifies; no API route inserts here.
     CREATE TABLE IF NOT EXISTS transactions_sms (
         id BIGSERIAL PRIMARY KEY,
@@ -127,13 +129,36 @@ SCHEMA_STATEMENTS: list[str] = [
         account_mask TEXT,
         counterparty TEXT,
         reference TEXT,
-        occurred_at TIMESTAMPTZ,
+        sms_received_at TIMESTAMPTZ,
         template_name TEXT NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         CONSTRAINT transactions_sms_amount_present CHECK (
             amount_paisa IS NOT NULL OR kind = 'bill_reminder'
         )
     )
+    """,
+    """
+    ALTER TABLE transactions_sms DROP COLUMN IF EXISTS occurred_at
+    """,
+    """
+    DO $$
+    BEGIN
+        IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'transactions_sms'
+              AND column_name = 'received_at'
+        ) THEN
+            ALTER TABLE transactions_sms RENAME COLUMN received_at TO sms_received_at;
+        ELSIF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'transactions_sms'
+              AND column_name = 'sms_received_at'
+        ) THEN
+            ALTER TABLE transactions_sms ADD COLUMN sms_received_at TIMESTAMPTZ;
+        END IF;
+    END $$
     """,
 ]
 

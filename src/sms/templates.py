@@ -18,8 +18,6 @@ class Template:
     pattern: re.Pattern[str]
     instrument: str | None = None
     amount_optional: bool = False
-    # Day-month with no year (credit-card UPI). Do not invent a year.
-    when_optional: bool = False
 
 
 def _t(
@@ -28,7 +26,6 @@ def _t(
     pattern: str,
     instrument: str | None = None,
     amount_optional: bool = False,
-    when_optional: bool = False,
 ) -> Template:
     return Template(
         name,
@@ -36,7 +33,6 @@ def _t(
         re.compile(pattern),
         instrument,
         amount_optional,
-        when_optional,
     )
 
 
@@ -103,7 +99,6 @@ TEMPLATES: tuple[Template, ...] = (
         r"by UPI (?P<ref>\d+)\s+"
         r"On (?P<when>\d{2}-\d{2})\b",
         "credit_card",
-        when_optional=True,
     ),
     _t(
         "credit_card_spend",
