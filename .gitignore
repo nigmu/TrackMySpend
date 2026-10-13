@@ -11,6 +11,7 @@ sms.json
 internal_README.md
 Points to be discussed.md
 samples/
+src/sms/test_parser/out/
 dblink_config_infos.txt
 
 
