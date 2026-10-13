@@ -15,7 +15,7 @@
   function formatTs(value) {
     if (!value) return "—";
     try {
-      return new Date(value).toLocaleString();
+      return new Date(value).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
     } catch {
       return String(value);
     }

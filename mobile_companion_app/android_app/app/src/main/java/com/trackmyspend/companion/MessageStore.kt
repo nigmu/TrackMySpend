@@ -11,6 +11,8 @@ import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 
+internal val IST: ZoneId = ZoneId.of("Asia/Kolkata")
+
 enum class DeliveryStatus {
     PENDING,
     SENDING,
@@ -182,7 +184,7 @@ class MessageStore(context: Context) {
         private val timeFormatter: DateTimeFormatter = DateTimeFormatter.ISO_OFFSET_DATE_TIME
 
         fun formatTime(timestampMillis: Long): String = timeFormatter.format(
-            ZonedDateTime.ofInstant(Instant.ofEpochMilli(timestampMillis), ZoneId.systemDefault())
+            ZonedDateTime.ofInstant(Instant.ofEpochMilli(timestampMillis), IST)
         )
 
         fun parseTimeMillis(iso: String): Long? = runCatching {

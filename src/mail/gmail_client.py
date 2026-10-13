@@ -1,11 +1,11 @@
-from datetime import datetime, timezone
+from datetime import datetime
 from email.utils import parsedate_to_datetime
 
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from ..accounts.service import credentials_from_account
-from ..core.config import BOOTSTRAP_MESSAGE_COUNT
+from ..core.config import BOOTSTRAP_MESSAGE_COUNT, IST
 from ..core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -106,8 +106,8 @@ def _parse_header_date(value: str | None) -> datetime | None:
     try:
         dt = parsedate_to_datetime(value)
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return dt
+            dt = dt.replace(tzinfo=IST)
+        return dt.astimezone(IST)
     except Exception:
         return None
 
@@ -116,6 +116,6 @@ def _internal_ms_to_dt(ms: str | int | None) -> datetime | None:
     if not ms:
         return None
     try:
-        return datetime.fromtimestamp(int(ms) / 1000, tz=timezone.utc)
+        return datetime.fromtimestamp(int(ms) / 1000, tz=IST)
     except Exception:
         return None

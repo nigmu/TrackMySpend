@@ -2,12 +2,14 @@ import json
 import logging
 import time
 import uuid
+from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from .config import (
+    IST,
     LOG_DIR,
     LOG_FILE_BACKUP_COUNT,
     LOG_FILE_MAX_BYTES,
@@ -18,10 +20,18 @@ from .config import (
 _FORMAT = "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
 
 
-class JsonFormatter(logging.Formatter):
+class IstFormatter(logging.Formatter):
+    def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:
+        dt = datetime.fromtimestamp(record.created, IST)
+        if datefmt:
+            return dt.strftime(datefmt)
+        return f"{dt.strftime('%Y-%m-%d %H:%M:%S')},{int(record.msecs):03d} {dt.strftime('%z')}"
+
+
+class JsonFormatter(IstFormatter):
     def format(self, record: logging.LogRecord) -> str:
         payload = {
-            "ts": self.formatTime(record, "%Y-%m-%dT%H:%M:%S"),
+            "ts": self.formatTime(record, "%Y-%m-%dT%H:%M:%S%z"),
             "level": record.levelname,
             "name": record.name,
             "message": record.getMessage(),
@@ -37,7 +47,7 @@ def configure_logging() -> None:
     if root.handlers:
         return
     root.setLevel(level)
-    formatter: logging.Formatter = JsonFormatter() if LOG_JSON else logging.Formatter(_FORMAT)
+    formatter: logging.Formatter = JsonFormatter() if LOG_JSON else IstFormatter(_FORMAT)
 
     console = logging.StreamHandler()
     console.setFormatter(formatter)

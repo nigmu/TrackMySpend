@@ -10,9 +10,11 @@ import csv
 import json
 import re
 import unittest
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock
+
+from src.core.config import IST
 
 from src.sms.amount import parse_amount_paisa
 from src.sms.classify import apply_sms_classification, classify_sms
@@ -248,7 +250,7 @@ class TestHdfcSmsParser(unittest.TestCase):
         for category_id, json_kind, body in SAMPLES:
             by_id.setdefault(category_id, (json_kind, body))
 
-        when = datetime(2026, 10, 11, 8, 30, tzinfo=UTC)
+        when = datetime(2026, 10, 11, 8, 30, tzinfo=IST)
         conn = MagicMock()
         conn.execute.return_value.fetchone.return_value = {"received_at": when}
         debit = classify_sms(by_id["upi_debit"][1])

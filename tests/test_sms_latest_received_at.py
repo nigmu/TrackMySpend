@@ -1,12 +1,13 @@
 """Unit tests for src.sms.db.latest_received_at (watermark cursor)."""
 
 import unittest
-from datetime import UTC, datetime
+from datetime import datetime
 from unittest.mock import MagicMock
 
+from src.core.config import IST
 from src.sms.db import latest_received_at
 
-WHEN = datetime(2026, 9, 2, 20, 0, tzinfo=UTC)
+WHEN = datetime(2026, 9, 2, 20, 0, tzinfo=IST)
 
 
 class TestLatestReceivedAt(unittest.TestCase):

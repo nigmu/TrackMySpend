@@ -1,7 +1,12 @@
 import json
 import os
+from datetime import timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlparse
+
+# India has no daylight saving; a fixed +05:30 offset is IST.
+APP_TIMEZONE = "Asia/Kolkata"
+IST = timezone(timedelta(hours=5, minutes=30), name="IST")
 
 from dotenv import load_dotenv
 

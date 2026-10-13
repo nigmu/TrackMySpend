@@ -134,10 +134,10 @@ def latest_received_at(conn: Connection, device_id: str) -> datetime | None:
 
 
 if __name__ == "__main__":
-    from datetime import UTC, datetime as dt
+    from datetime import datetime as dt, timedelta, timezone
     from unittest.mock import MagicMock
 
-    when = dt(2026, 9, 2, 20, 0, tzinfo=UTC)
+    when = dt(2026, 9, 2, 20, 0, tzinfo=timezone(timedelta(hours=5, minutes=30), name="IST"))
     a = sms_content_hash("VM-HDFCBK", "Rs.100 spent", "dev1")
     b = sms_content_hash("VM-HDFCBK", "Rs.100 spent", "dev1")
     c = sms_content_hash("VM-HDFCBK", "Rs.100 spent", "dev2")

@@ -1,6 +1,6 @@
 from ..core.logging import configure_logging, get_logger
 from ..sms.db import rehash_sms_content_hashes
-from .connection import connect
+from .connection import connect, set_database_timezone
 from .schema import POST_SCHEMA_STATEMENTS, SCHEMA_STATEMENTS
 
 logger = get_logger(__name__)
@@ -21,6 +21,7 @@ def migrate() -> None:
                 cur.execute(stmt)
         deleted = rehash_sms_content_hashes(conn)
         conn.commit()
+        set_database_timezone()
         logger.info(
             "migrate complete (%s statements, sms rehash deleted_dupes=%s)",
             len(statements),

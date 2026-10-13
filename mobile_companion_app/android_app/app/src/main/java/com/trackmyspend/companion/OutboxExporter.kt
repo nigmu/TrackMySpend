@@ -7,7 +7,7 @@ import android.os.Environment
 import android.provider.MediaStore
 import java.io.File
 import java.io.FileOutputStream
-import java.time.LocalDateTime
+import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
 object OutboxExporter {
@@ -37,5 +37,5 @@ object OutboxExporter {
     }
 
     private fun stamp(): String =
-        DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").format(LocalDateTime.now())
+        DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").format(ZonedDateTime.now(IST))
 }
