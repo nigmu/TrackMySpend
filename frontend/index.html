@@ -53,12 +53,15 @@
         </section>
         <section class="page" data-page="sms">
           <h2>Raw SMS</h2>
-          <p class="muted">Stored as received. Not yet parsed into transactions — planned next.</p>
+          <div class="row">
+            <button id="btn-parse-sms">Parse all</button>
+          </div>
           <div id="sms-table"></div>
+          <div id="sms-ledger-table"></div>
         </section>
         <section class="page" data-page="transactions">
           <h2>Transactions</h2>
-          <p class="muted">Parsed from Gmail alerts only. SMS is not parsed into transactions yet.</p>
+          <p class="muted">This table is Gmail only. The SMS ledger is on the SMS page.</p>
           <div id="txns-table"></div>
         </section>
         <section class="page" data-page="logs">

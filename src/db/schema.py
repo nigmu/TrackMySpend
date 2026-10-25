@@ -5,7 +5,8 @@ Two independent pipelines, easy to tell apart by table prefix:
            (raw_mail_data -> transactions is a one-to-one, populated by src/mail/parse.py)
   - SMS:   raw_sms_data, transactions_sms
            (raw_sms_data -> transactions_sms is one-to-one via raw_sms_id,
-           written by src/sms/classify.py; POST /sms/ingest does not parse)
+           written by src/sms/classify.py from POST /sms/ingest_and_parse
+           when the classification has a ledger, and rewritten by POST /sms/parse_all)
   - Shared: app_event_logs (used by both pipelines + TMS Companion OTA)
 """
 
@@ -118,7 +119,8 @@ SCHEMA_STATEMENTS: list[str] = [
     -- sms_received_at is copied from raw_sms_data.received_at when the row is
     -- written. The SMS body is not parsed for a date. amount_paisa is null
     -- only for a bill reminder whose text has no amount.
-    -- src/sms classifies; no API route inserts here.
+    -- Inserted by POST /sms/ingest_and_parse when a new row's classification
+    -- has a ledger. POST /sms/parse_all deletes and rewrites that ledger row.
     CREATE TABLE IF NOT EXISTS transactions_sms (
         id BIGSERIAL PRIMARY KEY,
         raw_sms_id BIGINT NOT NULL UNIQUE

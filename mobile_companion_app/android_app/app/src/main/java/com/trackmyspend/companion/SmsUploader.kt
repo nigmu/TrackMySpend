@@ -19,7 +19,7 @@ object SmsUploader {
             .put("received_at", message.receivedAt)
             .put("device_id", deviceId)
             .toString()
-        return postJson("${server.url}/sms/ingest", payload, server.token)
+        return postJson("${server.url}/sms/ingest_and_parse", payload, server.token)
     }
 
     internal fun attemptPlan(servers: List<ServerConfig>): List<ServerConfig> =

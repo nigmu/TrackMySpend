@@ -118,6 +118,26 @@ def count_sms(conn: Connection) -> int:
     return int(row["n"]) if row else 0
 
 
+def list_sms_transactions(conn: Connection, limit: int = 50, offset: int = 0) -> list[dict]:
+    return conn.execute(
+        """
+        SELECT t.id, t.raw_sms_id, t.kind, t.amount_paisa, t.instrument,
+               t.account_mask, t.counterparty, t.reference, t.sms_received_at,
+               t.template_name, t.created_at, r.sender, r.device_id
+        FROM transactions_sms t
+        JOIN raw_sms_data r ON r.id = t.raw_sms_id
+        ORDER BY t.sms_received_at DESC NULLS LAST, t.id DESC
+        LIMIT %s OFFSET %s
+        """,
+        (limit, offset),
+    ).fetchall()
+
+
+def count_sms_transactions(conn: Connection) -> int:
+    row = conn.execute("SELECT COUNT(*) AS n FROM transactions_sms").fetchone()
+    return int(row["n"]) if row else 0
+
+
 def latest_received_at(conn: Connection, device_id: str) -> datetime | None:
     """Max received_at for this device, or None if the device has no rows."""
     row = conn.execute(

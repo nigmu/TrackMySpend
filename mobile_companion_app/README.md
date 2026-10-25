@@ -15,9 +15,9 @@ The API is the main TrackMySpend service (`python main.py`, port **2006**). Ther
 1. Android sends an SMS broadcast to the app. Multipart messages are joined into one message.
 2. The app checks the sender against its local **Filters** list.
 3. A matching message is saved to the durable local outbox before any upload starts. An OTP text is not saved. The Log gets a row labeled `OTP ignored` and nothing is uploaded.
-4. WorkManager sends it to `POST /sms/ingest` when a network is available.
-5. The API stores it in `raw_sms_data` and ignores duplicate deliveries.
-6. Delivery details appear in the phone's **Log** tab. Stored messages and server events are available through `GET /sms` and `GET /logs`.
+4. WorkManager sends it to `POST /sms/ingest_and_parse` when a network is available.
+5. A new SMS: the same request inserts `raw_sms_data`, classifies, writes `transactions_sms` when the classification has a ledger, sets `processing_status`, then commits. A duplicate upload leaves both tables unchanged.
+6. Delivery details appear in the phone's **Log** tab. Stored messages and server events are available through `GET /sms` and `GET /logs`. `GET /sms/transactions` lists the ledger. **Parse all** on the web SMS page calls `POST /sms/parse_all`, reclassifies every raw row, deletes and rewrites that row's ledger, and returns `total`, `done`, `ignored`, `unmatched`. Gmail `GET /transactions` does not include SMS.
 
 ## Features
 
@@ -45,10 +45,10 @@ The API is the main TrackMySpend service (`python main.py`, port **2006**). Ther
 - **Up to three servers:** server entries contain a name, base URL, and optional token. They can be added, edited, deleted, and reordered.
 - **Ordered failover:** the first server is primary and is tried three times. Other servers are tried once each in priority order.
 - **Optional authentication:** when `SMS_INGEST_TOKEN` is set on the API, the same value must be saved with the server entry. It is sent in the `X-TrackMySpend-Token` header.
-- **Upload payload:** `POST /sms/ingest` receives `message_id`, `sender`, `body`, `received_at`, and `device_id`.
+- **Upload payload:** `POST /sms/ingest_and_parse` receives `message_id`, `sender`, `body`, `received_at`, and `device_id`.
 - **Server test:** the **Test** button calls `GET /health` and displays the response.
 
-LAN URLs such as `http://<host>:2006` are allowed. Do not add `/sms/ingest`, `/health`, or a trailing slash to a server URL; the app adds route paths itself.
+LAN URLs such as `http://<host>:2006` are allowed. Do not add `/sms/ingest_and_parse`, `/health`, or a trailing slash to a server URL; the app adds route paths itself.
 
 ### Logs and export
 
@@ -57,7 +57,7 @@ LAN URLs such as `http://<host>:2006` are allowed. Do not add `/sms/ingest`, `/h
 
 ### API integration
 
-- **SMS ingestion:** `POST /sms/ingest` validates the optional token and writes the message to PostgreSQL table `raw_sms_data`.
+- **SMS ingestion:** `POST /sms/ingest_and_parse` validates the optional token. A new SMS inserts `raw_sms_data`, classifies, writes `transactions_sms` when the classification has a ledger, sets `processing_status`, then commits. A duplicate upload leaves both tables unchanged.
 - **Server-side deduplication:** the API hashes the sender, body, and device ID. A unique database index prevents upload retries (and PDU vs inbox timestamp skew) from creating extra rows.
 - **Operational events:** accepted, duplicate, and failed ingestion events are recorded in `app_event_logs` and returned by `GET /logs`.
 - **SMS listing:** `GET /sms` returns paginated raw SMS records for the web SMS page.
@@ -73,7 +73,7 @@ LAN URLs such as `http://<host>:2006` are allowed. Do not add `/sms/ingest`, `/h
 ## API routes
 
 - `GET /health` — test API availability.
-- `POST /sms/ingest` — accept a message from the phone.
+- `POST /sms/ingest_and_parse` — accept a message from the phone and classify a new row before commit.
 - `GET /sms/latest-received-at` — max `received_at` for a `device_id` (watermark; requires ingest token when configured).
 - `GET /sms` — list stored SMS records.
 - `GET /logs` — list operational events.

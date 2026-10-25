@@ -253,13 +253,13 @@
 
   async function loadSms() {
     const el = document.getElementById("sms-table");
+    const ledgerEl = document.getElementById("sms-ledger-table");
     try {
       const data = await api.listSms();
       if (!data.sms.length) {
         el.innerHTML = "<p class='muted'>No SMS ingested yet.</p>";
-        return;
-      }
-      el.innerHTML = `<table>
+      } else {
+        el.innerHTML = `<table>
         <thead><tr><th>When</th><th>From</th><th>Device</th><th>Status</th><th>Body</th></tr></thead>
         <tbody>
           ${data.sms
@@ -275,10 +275,51 @@
             .join("")}
         </tbody>
       </table>`;
+      }
     } catch (err) {
       el.innerHTML = `<p class="err">${err.message}</p>`;
     }
+    try {
+      const data = await api.listSmsTransactions();
+      if (!data.transactions.length) {
+        ledgerEl.innerHTML = "<p class='muted'>No SMS ledger rows yet.</p>";
+        return;
+      }
+      ledgerEl.innerHTML = `<table>
+        <thead><tr><th>When</th><th>Kind</th><th>Amount</th><th>Instrument</th><th>Account</th><th>Counterparty</th><th>Reference</th><th>Template</th></tr></thead>
+        <tbody>
+          ${data.transactions
+            .map(
+              (t) => `<tr>
+                <td>${formatTs(t.sms_received_at)}</td>
+                <td>${t.kind || "—"}</td>
+                <td>${t.amount_paisa == null ? "—" : formatAmount(t.amount_paisa)}</td>
+                <td>${t.instrument || "—"}</td>
+                <td>${t.account_mask || "—"}</td>
+                <td>${t.counterparty || "—"}</td>
+                <td>${t.reference || "—"}</td>
+                <td>${t.template_name || "—"}</td>
+              </tr>`
+            )
+            .join("")}
+        </tbody>
+      </table>`;
+    } catch (err) {
+      ledgerEl.innerHTML = `<p class="err">${err.message}</p>`;
+    }
   }
+
+  document.getElementById("btn-parse-sms").addEventListener("click", async () => {
+    try {
+      const r = await api.parseAllSms();
+      showToast(
+        `Parse all total=${r.total} done=${r.done} ignored=${r.ignored} unmatched=${r.unmatched}`
+      );
+      loadSms();
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  });
 
   async function loadLogs() {
     const el = document.getElementById("logs-table");

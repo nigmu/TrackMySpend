@@ -56,7 +56,7 @@ app.add_middleware(
 
 # Two independent data pipelines, each with its own raw table and its own routes:
 #   mail  (src/mail)  Gmail OAuth -> sync -> raw_mail_data -> parse -> transactions
-#   sms   (src/sms)   TMS Companion -> POST /sms/ingest -> raw_sms_data (not yet parsed)
+#   sms   (src/sms)   TMS Companion -> POST /sms/ingest_and_parse stores the raw row and classifies it before commit
 # Shared/cross-cutting: accounts (Gmail OAuth creds), filters (Gmail sender_filters),
 # logs (app_event_logs), companion (TMS Companion OTA distribution).
 app.include_router(accounts_router)
@@ -72,7 +72,7 @@ app.mount("/releases", StaticFiles(directory=RELEASES_DIR), name="releases")
 
 @app.exception_handler(RequestValidationError)
 async def validation_error_handler(request: Request, exc: RequestValidationError):
-    if request.url.path == "/sms/ingest":
+    if request.url.path == "/sms/ingest_and_parse":
         logger.warning("sms ingest validation failed errors=%s", exc.errors())
     return JSONResponse(status_code=422, content={"detail": exc.errors()})
 

@@ -41,6 +41,8 @@ const api = {
   parse: () => apiFetch("/parse", { method: "POST" }),
   listMails: () => apiFetch("/mails"),
   listSms: () => apiFetch("/sms"),
+  parseAllSms: () => apiFetch("/sms/parse_all", { method: "POST" }),
+  listSmsTransactions: () => apiFetch("/sms/transactions"),
   listLogs: () => apiFetch("/logs"),
   listTransactions: () => apiFetch("/transactions"),
 };

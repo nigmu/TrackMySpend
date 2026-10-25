@@ -9,6 +9,7 @@ from ..core.logging import get_logger
 from ..db.connection import get_db
 from ..logs.db import insert_event_log
 from . import db
+from .classify import parse_new_sms, reparse_all_sms
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["SMS"])
@@ -30,8 +31,8 @@ def require_sms_token(x_trackmyspend_token: str | None = Header(default=None)) -
         raise HTTPException(status_code=401, detail="invalid ingest token")
 
 
-@router.post("/sms/ingest")
-def ingest_sms(
+@router.post("/sms/ingest_and_parse")
+def ingest_and_parse_sms(
     payload: SmsIngestRequest,
     conn: Connection = Depends(get_db),
     _: None = Depends(require_sms_token),
@@ -62,25 +63,7 @@ def ingest_sms(
             },
         )
         raise
-    if inserted:
-        logger.info(
-            "sms ingest accepted id=%s sender=%s message_id=%s",
-            row_id,
-            payload.sender,
-            payload.message_id,
-        )
-        insert_event_log(
-            "sms.ingest_accepted",
-            "sms",
-            f"SMS ingested id={row_id}",
-            context={
-                "id": row_id,
-                "message_id": payload.message_id,
-                "sender": payload.sender,
-                "device_id": payload.device_id,
-            },
-        )
-    else:
+    if not inserted:
         logger.info(
             "sms ingest duplicate id=%s sender=%s message_id=%s",
             row_id,
@@ -98,7 +81,44 @@ def ingest_sms(
                 "device_id": payload.device_id,
             },
         )
-    return {"status": "ok", "id": row_id, "duplicate": not inserted}
+        return {"status": "ok", "id": row_id, "duplicate": True}
+    result = parse_new_sms(conn, row_id, payload.body)
+    logger.info(
+        "sms ingest accepted id=%s sender=%s message_id=%s",
+        row_id,
+        payload.sender,
+        payload.message_id,
+    )
+    insert_event_log(
+        "sms.ingest_accepted",
+        "sms",
+        f"SMS ingested id={row_id}",
+        context={
+            "id": row_id,
+            "message_id": payload.message_id,
+            "sender": payload.sender,
+            "device_id": payload.device_id,
+            "processing_status": result.processing_status,
+        },
+    )
+    return {
+        "status": "ok",
+        "id": row_id,
+        "duplicate": False,
+        "processing_status": result.processing_status,
+    }
+
+
+@router.post("/sms/parse_all")
+def parse_all_sms(conn: Connection = Depends(get_db)):
+    counts = reparse_all_sms(conn)
+    insert_event_log(
+        "sms.parse_all",
+        "sms",
+        f"SMS parse all total={counts['total']} done={counts['done']} ignored={counts['ignored']} unmatched={counts['unmatched']}",
+        context=counts,
+    )
+    return counts
 
 
 @router.get("/sms/latest-received-at")
@@ -125,3 +145,13 @@ def get_sms(
 ):
     items = db.list_sms(conn, limit=limit, offset=offset)
     return {"count": len(items), "total": db.count_sms(conn), "sms": items}
+
+
+@router.get("/sms/transactions")
+def get_sms_transactions(
+    conn: Connection = Depends(get_db),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+):
+    items = db.list_sms_transactions(conn, limit=limit, offset=offset)
+    return {"count": len(items), "total": db.count_sms_transactions(conn), "transactions": items}

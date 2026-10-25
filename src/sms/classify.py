@@ -1,6 +1,7 @@
 """Classify one HDFC SMS body, and apply that result to a raw_sms_data row.
 
-No API route calls these. POST /sms/ingest only stores the raw message.
+Routes call parse_new_sms and reparse_all_sms. Ingest classifies a new row
+in the same request.
 """
 
 from __future__ import annotations
@@ -125,3 +126,26 @@ def apply_sms_classification(
         """,
         (result.processing_status, raw_sms_id),
     )
+
+
+def parse_new_sms(conn: Connection, raw_sms_id: int, body: str) -> SmsClassification:
+    result = classify_sms(body)
+    apply_sms_classification(conn, raw_sms_id, result)
+    return result
+
+
+def reparse_all_sms(conn: Connection) -> dict:
+    # ponytail: one transaction, full table scan. Fine for a personal SMS
+    # archive (thousands of rows). Upgrade path: keyset batches if this lock gets long.
+    rows = conn.execute(
+        "SELECT id, body FROM raw_sms_data ORDER BY id"
+    ).fetchall()
+    counts = {"total": len(rows), "done": 0, "ignored": 0, "unmatched": 0}
+    for row in rows:
+        conn.execute(
+            "DELETE FROM transactions_sms WHERE raw_sms_id = %s",
+            (row["id"],),
+        )
+        result = parse_new_sms(conn, int(row["id"]), row["body"])
+        counts[result.processing_status] += 1
+    return counts

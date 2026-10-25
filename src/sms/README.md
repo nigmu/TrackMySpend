@@ -1,6 +1,6 @@
 # SMS decisions
 
-Companion 2.0.4 drops OTP texts on the phone. Messages that still arrive are classified by the templates below into `transactions_sms`. `POST /sms/ingest` does not call the parser.
+Companion 2.0.4 drops OTP texts on the phone. Messages that still arrive are classified by the templates below into `transactions_sms`. `POST /sms/ingest_and_parse` inserts a new row in `raw_sms_data`, classifies, writes `transactions_sms` when the classification has a ledger, sets `processing_status`, then commits. A duplicate upload leaves both tables unchanged. **Parse all** on the SMS page calls `POST /sms/parse_all`, reclassifies every raw row, deletes and rewrites that row's ledger, and returns `total`, `done`, `ignored`, `unmatched`. `GET /sms/transactions` lists the ledger. Gmail `GET /transactions` does not include SMS.
 
 ## Where a message goes
 
@@ -45,7 +45,7 @@ Columns: `kind` (`debit`, `credit`, or `bill_reminder`), `amount_paisa`, `instru
 
 `amount_paisa` is null only for a reminder whose SMS has no amount (`credit_card_statement`). A debit or a credit always has an amount. The check constraint matches that.
 
-`classify_sms` takes one raw body and returns the classification. `apply_sms_classification` writes it: `processing_status` becomes `done` when a ledger row is inserted or the message is info, `ignored` when an ignore rule matches, and `unmatched` when nothing matches. Neither function commits. No route calls them.
+`classify_sms` takes one raw body and returns the classification. `apply_sms_classification` writes it: `processing_status` becomes `done` when a ledger row is inserted or the message is info, `ignored` when an ignore rule matches, and `unmatched` when nothing matches. Neither function commits. `POST /sms/ingest_and_parse` calls them for a new row in the same request. `POST /sms/parse_all` deletes that row's ledger, then calls them again for every raw row.
 
 JSON kind `reminder` is stored as `bill_reminder`. JSON kinds `ignore` and `info` write no ledger row. Categories with `count: 0` get no template until a real sample exists.
 

@@ -3,7 +3,7 @@
 TrackMySpend collects bank alerts from Gmail and Android SMS.
 
 - **Gmail alerts** are filtered, stored, and parsed into transactions.
-- **SMS alerts** are sent by TMS Companion and stored as raw messages. SMS-to-transaction parsing is not implemented yet.
+- **SMS alerts** are sent by TMS Companion. A new message is stored and classified in the same request. **Parse all** on the SMS page reclassifies every stored SMS.
 
 Both pipelines use the same FastAPI service and PostgreSQL database. The web UI is a separate static site.
 
@@ -27,11 +27,12 @@ Both pipelines use the same FastAPI service and PostgreSQL database. The web UI 
 
 1. TMS Companion receives an SMS on an Android phone.
 2. The phone applies its own local sender filters.
-3. Matching messages are sent to `POST /sms/ingest`.
-4. The API stores them in `raw_sms_data`.
-5. The web **SMS** page displays the stored messages.
+3. Matching messages are sent to `POST /sms/ingest_and_parse`.
+4. A new SMS: the same request inserts `raw_sms_data`, classifies, writes `transactions_sms` when the classification has a ledger, sets `processing_status`, then commits. A duplicate upload leaves both tables unchanged.
+5. **Parse all** on the SMS page calls `POST /sms/parse_all`, reclassifies every raw row, deletes and rewrites that row's ledger, and returns `total`, `done`, `ignored`, `unmatched`.
+6. `GET /sms/transactions` lists the ledger. The web **SMS** page shows the raw messages and that ledger.
 
-Gmail filters and Android filters are separate. SMS messages are not added to `transactions`.
+Gmail filters and Android filters are separate. Gmail `GET /transactions` does not include SMS.
 
 ## Features
 
@@ -72,11 +73,14 @@ These filters apply only to Gmail. TMS Companion keeps its SMS filters on the ph
 
 ### SMS ingestion
 
-- `POST /sms/ingest` accepts `message_id`, `sender`, `body`, `received_at`, and `device_id`.
+- `POST /sms/ingest_and_parse` accepts `message_id`, `sender`, `body`, `received_at`, and `device_id`.
 - `body` is required. The other fields are optional at the API boundary.
 - When `SMS_INGEST_TOKEN` is configured, the request must include the same value in `X-TrackMySpend-Token`.
 - The API hashes the sender, body, and device ID (`content_hash`). A unique index prevents retries and live-vs-inbox reuploads from creating duplicate rows. `received_at` is stored but not part of the hash.
+- A new SMS: the same request inserts `raw_sms_data`, classifies, writes `transactions_sms` when the classification has a ledger, sets `processing_status`, then commits. A duplicate upload leaves both tables unchanged.
+- **Parse all** on the SMS page calls `POST /sms/parse_all`, reclassifies every raw row, deletes and rewrites that row's ledger, and returns `total`, `done`, `ignored`, `unmatched`.
 - `GET /sms` returns the stored raw SMS records ordered by `received_at` (newest first), not by insert `id`.
+- `GET /sms/transactions` lists the ledger. Gmail `GET /transactions` does not include SMS.
 
 See [TMS Companion documentation](mobile_companion_app/README.md) for Android features, setup, delivery retries, and updates.
 
@@ -88,8 +92,8 @@ The frontend is plain HTML, CSS, and JavaScript. It has seven pages:
 - **Accounts:** connect, list, sync, and remove Gmail accounts; sync all accounts or parse pending mail.
 - **Filters:** add and delete Gmail sender filters.
 - **Mail:** inspect raw matching Gmail alerts and processing states.
-- **SMS:** inspect raw messages received from TMS Companion.
-- **Transactions:** view amounts parsed from Gmail.
+- **SMS:** inspect raw messages from TMS Companion and the SMS ledger. **Parse all** reclassifies every stored SMS.
+- **Transactions:** view amounts parsed from Gmail. This list does not include SMS.
 - **Logs:** view important application events.
 
 The sidebar's **API base** field can temporarily point the UI at another API server. Its default comes from `API_PUBLIC_BASE` through generated file `frontend/js/env.js`.
@@ -136,8 +140,10 @@ The sidebar's **API base** field can temporarily point the UI at another API ser
 
 ### SMS and logs
 
-- `POST /sms/ingest` — receive an SMS from TMS Companion.
+- `POST /sms/ingest_and_parse` — receive an SMS from TMS Companion. A new row is stored and classified before commit. A duplicate leaves both tables unchanged.
+- `POST /sms/parse_all` — reclassify every raw SMS, delete and rewrite that row's ledger, and return `total`, `done`, `ignored`, `unmatched`.
 - `GET /sms` — list raw SMS messages.
+- `GET /sms/transactions` — list the SMS ledger. Gmail `GET /transactions` does not include these rows.
 - `GET /logs` — list application events.
 
 ### Android updates
@@ -145,7 +151,7 @@ The sidebar's **API base** field can temporarily point the UI at another API ser
 - `GET /app/update.json` — return the Android update manifest. A path in `apk_url` is prefixed with `API_PUBLIC_BASE`.
 - `GET /releases/{filename}` — download a published APK.
 
-`GET /mails`, `GET /transactions`, `GET /sms`, and `GET /logs` accept `limit` and `offset`. The default limit is 50 and the maximum is 200.
+`GET /mails`, `GET /transactions`, `GET /sms`, `GET /sms/transactions`, and `GET /logs` accept `limit` and `offset`. The default limit is 50 and the maximum is 200.
 
 ## Project layout
 
@@ -153,7 +159,7 @@ The sidebar's **API base** field can temporarily point the UI at another API ser
 src/accounts/                     Gmail OAuth and connected accounts
 src/filters/                      Gmail sender filters
 src/mail/                         Gmail sync, polling, storage, and parsing
-src/sms/                          SMS ingestion and deduplication
+src/sms/                          SMS ingest-and-parse, reparse, and the SMS ledger
 src/logs/                         Persistent application events
 src/companion/                    Android update manifest route
 src/core/                         Configuration, logging, encryption, and amount parsing
@@ -266,7 +272,7 @@ Use a registered public hostname or localhost for OAuth. Google does not accept 
 - `FRONTEND_ORIGIN` — public web UI origin used for OAuth return and CORS.
 - `CORS_EXTRA_ORIGINS` — comma-separated LAN or Tailscale UI origins.
 - `PUBLIC_HOST` — fallback host only; derives `http://<host>:2006` and `http://<host>:2007` when explicit public origins are unset.
-- `SMS_INGEST_TOKEN` — optional shared token required by `POST /sms/ingest`.
+- `SMS_INGEST_TOKEN` — optional shared token required by `POST /sms/ingest_and_parse`.
 - `LOG_LEVEL` — Python log level; defaults to `INFO`.
 - `LOG_DIR` — log directory; defaults to `logs`.
 - `LOG_JSON` — use JSON log lines when set to `true`.
@@ -286,7 +292,7 @@ Local addresses:
 
 The web UI uses one API base at a time. TMS Companion can keep up to three ordered API servers for retry and failover.
 
-Only SMS ingestion has shared-token protection inside this application. If the API is exposed publicly, protect the remaining routes at the network or proxy layer. Any proxy access policy must still allow the companion to reach `/health`, `/sms/ingest`, `/app/update.json`, and `/releases/`.
+Only SMS ingestion has shared-token protection inside this application. If the API is exposed publicly, protect the remaining routes at the network or proxy layer. Any proxy access policy must still allow the companion to reach `/health`, `/sms/ingest_and_parse`, `/app/update.json`, and `/releases/`.
 
 ## Database updates
 
