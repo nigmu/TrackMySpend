@@ -22,6 +22,7 @@ class SettingsFragment : Fragment() {
         binding.manifestRow.setOnClickListener { host()?.showUpdateManifestUrlSheet() }
         binding.backfillRow.setOnClickListener { host()?.showBackfillSettingsSheet() }
         binding.exportRow.setOnClickListener { host()?.requestExportOutbox() }
+        binding.deleteOutboxRow.setOnClickListener { host()?.confirmDeleteOutbox() }
         refresh()
     }
 

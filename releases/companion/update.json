@@ -1,6 +1,6 @@
 {
-  "version_code": 12,
-  "version_name": "2.0.5",
-  "apk_url": "/releases/companion-2.0.5.apk",
-  "changelog": "- SMS times are stamped in IST."
+  "version_code": 13,
+  "version_name": "2.0.6",
+  "apk_url": "/releases/companion-2.0.6.apk",
+  "changelog": "- SMS uploads go to /sms/ingest_and_parse.\n- Settings can delete the local outbox."
 }

@@ -11,8 +11,8 @@ android {
         applicationId = "com.trackmyspend.companion"
         minSdk = 26
         targetSdk = 34
-        versionCode = 12
-        versionName = "2.0.5"
+        versionCode = 13
+        versionName = "2.0.6"
     }
 
     buildTypes {

@@ -5,7 +5,7 @@ TMS Companion is an Android app that reads SMS on a real phone and sends matchin
 The API is the main TrackMySpend service (`python main.py`, port **2006**). There is no separate SMS server. Carrier SMS is not available in a normal emulator, so use a physical phone.
 
 - App ID: `com.trackmyspend.companion`
-- Current version: `1.5` (`versionCode 6`)
+- Current version: `2.0.6` (`versionCode 13`)
 - Minimum Android: 8.0 (API 26)
 - Target Android: 14 (API 34)
 - Build JDK: 17
@@ -54,6 +54,7 @@ LAN URLs such as `http://<host>:2006` are allowed. Do not add `/sms/ingest_and_p
 
 - **Detailed Log tab:** shows all local outbox entries, newest first. It includes the sender, received time, delivery state, attempts, message ID, accepted time, server URL, HTTP status, and error. SMS bodies are not displayed in this screen. An OTP SMS appears as **OTP ignored**, with no message text and no Retry button.
 - **JSON export:** **☰ → Export messages JSON** writes the complete outbox, including message bodies, to the phone's Downloads folder. An ignored OTP row exports the text `OTP ignored`, not the SMS.
+- **Delete local outbox:** **☰ → Delete local outbox** asks for confirmation, then removes every message stored in the app and cancels queued uploads. The phone's SMS inbox and the server tables stay as they are. The next **Pull SMS** sees an empty outbox and asks the server for its newest time.
 
 ### API integration
 

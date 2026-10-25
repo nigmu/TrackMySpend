@@ -90,6 +90,10 @@ class MessageStore(context: Context) {
         read().isEmpty()
     }
 
+    fun clear() {
+        synchronized(lock) { write(emptyList()) }
+    }
+
     /** Max receivedAt as epoch millis, or null if outbox is empty / unparseable. */
     fun maxReceivedAtMillis(): Long? = synchronized(lock) {
         read().mapNotNull { parseTimeMillis(it.receivedAt) }.maxOrNull()

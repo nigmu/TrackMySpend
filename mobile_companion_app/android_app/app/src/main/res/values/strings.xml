@@ -81,6 +81,11 @@
     <string name="settings_backfill_subtitle">Lookback %1$d hours · max %2$d rows</string>
     <string name="settings_export_title">Export messages JSON</string>
     <string name="settings_export_subtitle">Write the outbox to Downloads</string>
+    <string name="settings_delete_outbox_title">Delete local outbox</string>
+    <string name="settings_delete_outbox_subtitle">Remove messages stored in the app</string>
+    <string name="delete_outbox_title">Delete local outbox?</string>
+    <string name="delete_outbox_message">This removes every message the app has stored. The phone inbox and the server are left as they are.</string>
+    <string name="delete_outbox_done">Local outbox deleted</string>
     <string name="settings_version_title">App version</string>
     <string name="settings_version_subtitle">v%1$s (%2$d)</string>
     <string name="menu_check_updates">Check for updates</string>

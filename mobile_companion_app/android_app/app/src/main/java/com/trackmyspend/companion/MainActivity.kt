@@ -11,6 +11,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentManager
+import androidx.work.WorkManager
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
@@ -172,6 +173,19 @@ class MainActivity : AppCompatActivity() {
             (supportFragmentManager.findFragmentByTag(TAG_SETTINGS) as? SettingsFragment)?.onResume()
         }
         dialog.show()
+    }
+
+    fun confirmDeleteOutbox() {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.delete_outbox_title)
+            .setMessage(R.string.delete_outbox_message)
+            .setPositiveButton(R.string.delete) { _, _ ->
+                MessageStore(this).clear()
+                WorkManager.getInstance(this).cancelAllWorkByTag(UploadWorker.TAG)
+                Snackbar.make(binding.root, R.string.delete_outbox_done, Snackbar.LENGTH_SHORT).show()
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
     }
 
     fun showUpdateManifestUrlSheet() {
