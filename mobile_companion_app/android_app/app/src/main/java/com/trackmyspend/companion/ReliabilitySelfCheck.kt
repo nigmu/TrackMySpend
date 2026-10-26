@@ -44,6 +44,12 @@ object ReliabilitySelfCheck {
         val lookback = InboxBackfill.chooseLocalOrLookback(null, 48, now)
         check(lookback == now - 48L * 60L * 60L * 1000L)
         check(InboxBackfill.chooseLocalOrLookback(now - 5_000L, 48, now) == now - 5_000L)
+        check(!InboxBackfill.shouldPostBackfill(0, null))
+        check(InboxBackfill.shouldPostBackfill(1, null))
+        check(InboxBackfill.shouldPostBackfill(0, "watermark"))
+        check(InboxBackfill.backfillSeverity(null, false) == "info")
+        check(InboxBackfill.backfillSeverity(null, true) == "warning")
+        check(InboxBackfill.backfillSeverity("SMS permission not granted", false) == "warning")
 
         check(!OtpFilter.isOtpSms(
             "Spent Rs.61.71 On HDFC Bank Card 6517 At UBER INDIA SYSTEMS PRI On 2026-10-09:21:51:52." +

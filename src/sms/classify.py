@@ -30,6 +30,8 @@ class SmsClassification:
     category_id: str | None
     processing_status: str  # done | ignored | unmatched
     ledger: SmsLedger | None = None
+    reason: str | None = None  # no_template | amount_unparsed
+    template: str | None = None  # set when wording matched but the amount did not
 
 
 def _field(match, name: str) -> str | None:
@@ -76,9 +78,11 @@ def classify_sms(body: str) -> SmsClassification:
         if ledger is None:
             # Wording matched but the amount span did not parse. Do not guess
             # and do not fall through to a looser template.
-            return SmsClassification(None, "unmatched", None)
+            return SmsClassification(
+                None, "unmatched", None, "amount_unparsed", template.name
+            )
         return SmsClassification(template.name, "done", ledger)
-    return SmsClassification(None, "unmatched", None)
+    return SmsClassification(None, "unmatched", None, "no_template")
 
 
 def apply_sms_classification(

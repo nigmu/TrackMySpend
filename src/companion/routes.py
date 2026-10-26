@@ -62,18 +62,9 @@ def app_update():
             severity="error",
         )
         return _with_public_apk_url(_fallback_manifest())
-    logger.info(
+    logger.debug(
         "companion manifest served version_code=%s version_name=%s",
         data.get("version_code"),
         data.get("version_name"),
-    )
-    insert_event_log(
-        "companion.manifest_served",
-        "companion",
-        f"TMS Companion manifest served v{data.get('version_name', '')}",
-        context={
-            "version_code": data.get("version_code"),
-            "version_name": data.get("version_name"),
-        },
     )
     return _with_public_apk_url(data)

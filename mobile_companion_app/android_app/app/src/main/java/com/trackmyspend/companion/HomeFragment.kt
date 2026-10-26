@@ -58,7 +58,9 @@ class HomeFragment : Fragment() {
         val pending = entries.count {
             it.status == DeliveryStatus.PENDING || it.status == DeliveryStatus.SENDING
         }
-        val failed = entries.count { it.status == DeliveryStatus.FAILED }
+        val failed = entries.count {
+            it.status == DeliveryStatus.FAILED && it.sender != MessageStore.BACKFILL_SENDER
+        }
         binding.pendingCountText.text = pending.toString()
         binding.failedCountText.text = failed.toString()
         binding.retryAllButton.visibility = if (failed > 0) View.VISIBLE else View.GONE
@@ -88,7 +90,9 @@ class HomeFragment : Fragment() {
     }
 
     private fun retryAllFailed() {
-        val failed = store.getAll().filter { it.status == DeliveryStatus.FAILED }
+        val failed = store.getAll().filter {
+            it.status == DeliveryStatus.FAILED && it.sender != MessageStore.BACKFILL_SENDER
+        }
         var queued = 0
         failed.forEach { if (UploadWorker.retry(requireContext(), it.messageId)) queued++ }
         if (queued > 0) {

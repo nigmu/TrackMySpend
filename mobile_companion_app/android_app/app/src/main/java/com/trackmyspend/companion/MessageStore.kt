@@ -86,8 +86,9 @@ class MessageStore(context: Context) {
         read().asReversed()
     }
 
+    /** No captured SMS. A backfill notice does not count. */
     fun isEmpty(): Boolean = synchronized(lock) {
-        read().isEmpty()
+        read().none { it.sender != BACKFILL_SENDER }
     }
 
     fun clear() {
@@ -96,7 +97,26 @@ class MessageStore(context: Context) {
 
     /** Max receivedAt as epoch millis, or null if outbox is empty / unparseable. */
     fun maxReceivedAtMillis(): Long? = synchronized(lock) {
-        read().mapNotNull { parseTimeMillis(it.receivedAt) }.maxOrNull()
+        read().filter { it.sender != BACKFILL_SENDER }
+            .mapNotNull { parseTimeMillis(it.receivedAt) }
+            .maxOrNull()
+    }
+
+    /** One row per distinct error. Body is a fixed label, never an SMS. */
+    fun insertBackfillFailure(error: String) {
+        synchronized(lock) {
+            val messages = read()
+            if (messages.any { it.sender == BACKFILL_SENDER && it.lastError == error }) return
+            val message = OutboxMessage(
+                messageId = UUID.randomUUID().toString(),
+                sender = BACKFILL_SENDER,
+                body = BACKFILL_BODY,
+                receivedAt = formatTime(System.currentTimeMillis()),
+                status = DeliveryStatus.FAILED,
+                lastError = error,
+            )
+            write(messages + message)
+        }
     }
 
     fun exportJson(): String = synchronized(lock) {
@@ -137,7 +157,7 @@ class MessageStore(context: Context) {
     fun prepareRetry(messageId: String): Boolean {
         var found = false
         update(messageId) {
-            if (it.status == DeliveryStatus.IGNORED) {
+            if (it.status == DeliveryStatus.IGNORED || it.sender == BACKFILL_SENDER) {
                 it
             } else {
                 found = true
@@ -183,6 +203,8 @@ class MessageStore(context: Context) {
     }
 
     companion object {
+        const val BACKFILL_SENDER = "backfill"
+        private const val BACKFILL_BODY = "backfill failed"
         private const val FILE_NAME = "outbox_messages.json"
         private val lock = Any()
         private val timeFormatter: DateTimeFormatter = DateTimeFormatter.ISO_OFFSET_DATE_TIME

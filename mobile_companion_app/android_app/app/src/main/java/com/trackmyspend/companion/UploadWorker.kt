@@ -22,6 +22,7 @@ class UploadWorker(appContext: Context, params: WorkerParameters) : Worker(appCo
         if (message.status == DeliveryStatus.SENT || message.status == DeliveryStatus.IGNORED) {
             return Result.success()
         }
+        if (message.sender == MessageStore.BACKFILL_SENDER) return Result.success()
 
         val servers = PrefsStore(applicationContext).getServers()
         if (servers.isEmpty()) {

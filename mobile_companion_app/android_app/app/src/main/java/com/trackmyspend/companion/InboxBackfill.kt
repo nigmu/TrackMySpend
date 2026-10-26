@@ -28,14 +28,14 @@ object InboxBackfill {
 
     fun run(context: Context, source: BackfillSource): BackfillResult {
         val appContext = context.applicationContext
+        val store = MessageStore(appContext)
         if (ContextCompat.checkSelfPermission(appContext, Manifest.permission.READ_SMS)
             != PackageManager.PERMISSION_GRANTED
         ) {
-            return BackfillResult(source = source, error = "SMS permission not granted")
+            return fail(store, source, "SMS permission not granted")
         }
 
         val prefs = PrefsStore(appContext)
-        val store = MessageStore(appContext)
         val lookbackHours = prefs.getBackfillLookbackHours()
         val maxRows = prefs.getBackfillMaxRows()
         val servers = prefs.getServers()
@@ -45,10 +45,11 @@ object InboxBackfill {
         }
 
         val cursor = resolveCursor(store, servers, appContext, lookbackHours, source)
-            ?: return BackfillResult(
-                source = source,
+            ?: return fail(
+                store,
+                source,
+                if (servers.isEmpty()) "No server configured" else "Watermark fetch failed on all servers",
                 watermarkUsed = store.isEmpty(),
-                error = if (servers.isEmpty()) "No server configured" else "Watermark fetch failed on all servers",
             )
 
         val sinceMillis = cursor.sinceMillis
@@ -102,6 +103,20 @@ object InboxBackfill {
         return result
     }
 
+    private fun fail(
+        store: MessageStore,
+        source: BackfillSource,
+        error: String,
+        watermarkUsed: Boolean = false,
+    ): BackfillResult {
+        store.insertBackfillFailure(error)
+        return BackfillResult(source = source, watermarkUsed = watermarkUsed, error = error)
+    }
+
+    /** Quiet success stays info. An error or a capped scan is a warning. */
+    internal fun backfillSeverity(error: String?, hitCap: Boolean): String =
+        if (error != null || hitCap) "warning" else "info"
+
     /** Pure cursor choice for self-check: local max wins when present. */
     internal fun chooseLocalOrLookback(localMaxMillis: Long?, lookbackHours: Int, nowMillis: Long): Long {
         if (localMaxMillis != null) return localMaxMillis
@@ -140,11 +155,16 @@ object InboxBackfill {
         }
     }
 
+    /** Quiet open-app scans stay off the activity feed. An enqueue or an error still posts. */
+    internal fun shouldPostBackfill(enqueued: Int, error: String?): Boolean =
+        enqueued > 0 || error != null
+
     private fun postBackfillEvent(servers: List<ServerConfig>, result: BackfillResult, sinceMillis: Long) {
         if (result.error != null && result.watermarkUsed) {
             // All servers down — cannot POST; phone UI only.
             return
         }
+        if (!shouldPostBackfill(result.enqueued, result.error)) return
         val eventType = when (result.source) {
             BackfillSource.AFTER_SERVER_SAVE -> "backfill.after_server_save"
             BackfillSource.ON_OPEN -> "backfill.on_open"
@@ -161,6 +181,7 @@ object InboxBackfill {
             eventType,
             "Backfill ${result.source.name.lowercase()} enqueued=${result.enqueued}",
             context,
+            backfillSeverity(result.error, result.hitCap),
         )
     }
 }

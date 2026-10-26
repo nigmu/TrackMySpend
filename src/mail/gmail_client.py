@@ -52,14 +52,22 @@ def get_message_meta(service, msg_id: str) -> dict:
         for h in msg.get("payload", {}).get("headers", [])
         if h.get("name")
     }
+    date_header = headers.get("date")
+    sent = _parse_header_date(date_header)
+    internal = msg.get("internalDate")
+    received = _internal_ms_to_dt(internal)
+    if date_header and sent is None:
+        logger.warning("gmail date unparsed id=%s field=Date", msg["id"])
+    if internal and received is None:
+        logger.warning("gmail date unparsed id=%s field=internalDate", msg["id"])
     return {
         "gmail_message_id": msg["id"],
         "gmail_thread_id": msg.get("threadId"),
         "sender": headers.get("from"),
         "subject": headers.get("subject"),
         "snippet": msg.get("snippet"),
-        "email_sent_at": _parse_header_date(headers.get("date")),
-        "gmail_received_at": _internal_ms_to_dt(msg.get("internalDate")),
+        "email_sent_at": sent,
+        "gmail_received_at": received,
     }
 
 

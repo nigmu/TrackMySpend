@@ -31,9 +31,9 @@ def add_filter(conn: Connection, pattern: str) -> dict:
     return row
 
 
-def delete_filter(conn: Connection, filter_id: int) -> bool:
-    cur = conn.execute(
-        "DELETE FROM sender_filters WHERE id = %s RETURNING id",
+def delete_filter(conn: Connection, filter_id: int) -> str | None:
+    row = conn.execute(
+        "DELETE FROM sender_filters WHERE id = %s RETURNING pattern",
         (filter_id,),
-    )
-    return cur.fetchone() is not None
+    ).fetchone()
+    return None if row is None else row["pattern"]

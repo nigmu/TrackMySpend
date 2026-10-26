@@ -13,6 +13,7 @@ Every sync is followed by a parse pass (src/mail/parse.py) so freshly ingested
 rows turn into transactions without a separate trigger.
 """
 
+from cryptography.fernet import InvalidToken
 from psycopg import Connection
 
 from ..accounts import db as accounts_db
@@ -50,7 +51,9 @@ def _ingest_ids(conn: Connection, service, account_id: int, ids: list[str], patt
         try:
             msg = get_message_meta(service, msg_id)
         except Exception:
-            logger.warning("message fetch failed id=%s", msg_id, exc_info=True)
+            logger.warning(
+                "message fetch failed account_id=%s id=%s", account_id, msg_id, exc_info=True
+            )
             failed += 1
             continue
         rule = match_sender(msg.get("sender"), patterns)
@@ -70,8 +73,8 @@ def _bootstrap(conn: Connection, service, account_id: int, patterns: list[str]) 
     stats = _ingest_ids(conn, service, account_id, ids, patterns)
     history_id = profile_history_id(service)
     logger.info(
-        "bootstrap account_id=%s seen=%s inserted=%s skipped=%s",
-        account_id, stats["seen"], stats["inserted"], stats["skipped"],
+        "bootstrap account_id=%s seen=%s inserted=%s skipped=%s failed=%s",
+        account_id, stats["seen"], stats["inserted"], stats["skipped"], stats["failed"],
     )
     return stats, history_id
 
@@ -122,19 +125,29 @@ def sync_one(conn: Connection, account: dict, trigger: str) -> dict:
         insert_event_log(
             "gmail.sync_completed",
             "mail",
-            f"Gmail sync done account_id={account_id}",
+            (
+                f"Gmail sync done account_id={account_id}"
+                f" seen={stats['seen']} inserted={stats['inserted']}"
+                f" skipped={stats['skipped']} failed={stats['failed']}"
+            ),
             context={"account_id": account_id, "trigger": trigger, **stats},
         )
         return {"account_id": account_id, "status": "done", **stats}
     except Exception as exc:
-        db.finish_sync_run(conn, run_id, "failed", error_message=str(exc))
-        logger.exception("sync failed account_id=%s", account_id)
+        if isinstance(exc, InvalidToken):
+            error = "token_decrypt_failed"
+            detail = f"reason={error}"
+        else:
+            error = " ".join(str(exc).split())
+            detail = f"error={error}"
+        db.finish_sync_run(conn, run_id, "failed", error_message=error)
+        logger.exception("sync failed account_id=%s %s", account_id, detail)
         insert_event_log(
             "gmail.sync_failed",
             "mail",
-            f"Gmail sync failed account_id={account_id}",
+            f"Gmail sync failed account_id={account_id} {detail}",
             severity="error",
-            context={"account_id": account_id, "trigger": trigger, "error": str(exc)},
+            context={"account_id": account_id, "trigger": trigger, "error": error},
         )
         return {"account_id": account_id, "status": "failed", "error": str(exc)}
 

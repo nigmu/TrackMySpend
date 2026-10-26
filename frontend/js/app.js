@@ -1,3 +1,37 @@
+function escapeHtml(text) {
+  return String(text).replace(/[&<>"]/g, (ch) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+  })[ch]);
+}
+
+function formatLogContext(context) {
+  if (!context || typeof context !== "object" || Array.isArray(context)) return "";
+  return Object.entries(context)
+    .map(([key, value]) => {
+      const rendered = value !== null && typeof value === "object" ? JSON.stringify(value) : (value ?? "");
+      return `${escapeHtml(key)}=${escapeHtml(rendered)}`;
+    })
+    .join("<br>");
+}
+
+if (typeof document === "undefined") {
+  const assert = require("node:assert");
+  assert.strictEqual(formatLogContext(null), "");
+  assert.strictEqual(formatLogContext({}), "");
+  assert.strictEqual(formatLogContext([]), "");
+  assert.strictEqual(
+    formatLogContext({ seen: 10, inserted: 2, skipped: 7, failed: 1 }),
+    "seen=10<br>inserted=2<br>skipped=7<br>failed=1",
+  );
+  assert.strictEqual(formatLogContext({ note: "<b>" }), "note=&lt;b&gt;");
+  assert.strictEqual(formatLogContext({ ok: false, n: 0 }), "ok=false<br>n=0");
+  console.log("formatLogContext ok");
+  process.exit(0);
+}
+
 (function () {
   const toastEl = document.getElementById("toast");
   let toastTimer = null;
@@ -330,7 +364,7 @@
         return;
       }
       el.innerHTML = `<table>
-        <thead><tr><th>When</th><th>Severity</th><th>Source</th><th>Event</th><th>Message</th></tr></thead>
+        <thead><tr><th>When</th><th>Severity</th><th>Source</th><th>Event</th><th>Message</th><th>Context</th></tr></thead>
         <tbody>
           ${data.logs
             .map(
@@ -340,6 +374,7 @@
                 <td>${row.source}</td>
                 <td>${row.event_type}</td>
                 <td>${row.message}</td>
+                <td>${formatLogContext(row.context)}</td>
               </tr>`
             )
             .join("")}

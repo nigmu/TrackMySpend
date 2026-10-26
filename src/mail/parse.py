@@ -7,6 +7,26 @@ from ..logs.db import insert_event_log
 
 logger = get_logger(__name__)
 
+# ponytail: message lists this many failed ids; the row's processing_status holds the rest.
+# Upgrade path: query raw_mail_data where processing_status = 'failed'.
+_PARSE_FAIL_ID_CAP = 20
+
+
+def parse_event(claimed: int, done: int, failed_ids: list[int]) -> tuple[str, str, str]:
+    """event_type, severity, message. Failed ids in the message are capped."""
+    message = f"Parse claimed={claimed} done={done} failed={len(failed_ids)}"
+    if failed_ids:
+        shown = failed_ids[:_PARSE_FAIL_ID_CAP]
+        extra = len(failed_ids) - len(shown)
+        message += " ids=" + ",".join(str(i) for i in shown)
+        if extra:
+            message += f",+{extra}"
+    if failed_ids and done == 0:
+        return "parse.failed", "error", message
+    if failed_ids:
+        return "parse.completed", "warning", message
+    return "parse.completed", "info", message
+
 
 def parse_pending(conn: Connection, limit: int = PARSE_BATCH_LIMIT) -> dict:
     rows = conn.execute(
@@ -26,7 +46,7 @@ def parse_pending(conn: Connection, limit: int = PARSE_BATCH_LIMIT) -> dict:
     ).fetchall()
 
     done = 0
-    failed = 0
+    failed_ids: list[int] = []
     for row in rows:
         text = f"{row['subject'] or ''} {row['snippet'] or ''}"
         amount = parse_amount_paisa(text)
@@ -41,7 +61,7 @@ def parse_pending(conn: Connection, limit: int = PARSE_BATCH_LIMIT) -> dict:
                 """,
                 (row["id"],),
             )
-            failed += 1
+            failed_ids.append(int(row["id"]))
             continue
         conn.execute(
             """
@@ -61,18 +81,20 @@ def parse_pending(conn: Connection, limit: int = PARSE_BATCH_LIMIT) -> dict:
         )
         done += 1
 
-    logger.info("parse finished claimed=%s done=%s failed=%s", len(rows), done, failed)
+    event_type, severity, message = parse_event(len(rows), done, failed_ids)
+    getattr(logger, severity)(message)
     if rows:
-        event_type = "parse.failed" if failed and not done else "parse.completed"
-        severity = "error" if failed and not done else "info"
+        context = {"claimed": len(rows), "done": done, "failed": len(failed_ids)}
+        if failed_ids:
+            context["failed_ids"] = failed_ids[:_PARSE_FAIL_ID_CAP]
         insert_event_log(
             event_type,
             "mail",
-            f"Parse claimed={len(rows)} done={done} failed={failed}",
+            message,
             severity=severity,
-            context={"claimed": len(rows), "done": done, "failed": failed},
+            context=context,
         )
-    return {"claimed": len(rows), "done": done, "failed": failed}
+    return {"claimed": len(rows), "done": done, "failed": len(failed_ids)}
 
 
 def list_transactions(conn: Connection, limit: int = 50, offset: int = 0) -> list[dict]:

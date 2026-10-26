@@ -80,12 +80,18 @@ object SmsUploader {
         return WatermarkFetch.Failed(lastError)
     }
 
-    fun postEvent(servers: List<ServerConfig>, eventType: String, message: String, context: JSONObject? = null): Boolean {
+    fun postEvent(
+        servers: List<ServerConfig>,
+        eventType: String,
+        message: String,
+        context: JSONObject? = null,
+        severity: String = "info",
+    ): Boolean {
         if (servers.isEmpty()) return false
         val payload = JSONObject()
             .put("event_type", eventType)
             .put("message", message)
-            .put("severity", "info")
+            .put("severity", severity)
             .put("context", context ?: JSONObject())
             .toString()
         for (server in servers) {

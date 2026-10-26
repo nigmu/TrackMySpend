@@ -152,7 +152,11 @@ class LogFragment : Fragment() {
                     notifyItemChanged(bindingAdapterPosition)
                 }
                 itemBinding.retryButton.visibility =
-                    if (entry.status == DeliveryStatus.FAILED) View.VISIBLE else View.GONE
+                    if (entry.status == DeliveryStatus.FAILED && entry.sender != MessageStore.BACKFILL_SENDER) {
+                        View.VISIBLE
+                    } else {
+                        View.GONE
+                    }
                 itemBinding.retryButton.setOnClickListener { onRetry(entry, it) }
             }
 

@@ -1,6 +1,6 @@
 {
-  "version_code": 13,
-  "version_name": "2.0.6",
-  "apk_url": "/releases/companion-2.0.6.apk",
-  "changelog": "- SMS uploads go to /sms/ingest_and_parse.\n- Settings can delete the local outbox."
+  "version_code": 14,
+  "version_name": "2.0.7",
+  "apk_url": "/releases/companion-2.0.7.apk",
+  "changelog": "- A backfill that finds nothing no longer posts to the server.\n- A failed backfill stays in the phone log.\n- A crash while saving an SMS is logged without the message text."
 }

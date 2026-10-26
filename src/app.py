@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from .core.config import CORS_ORIGINS
+from .core.config import CORS_ORIGINS, SMS_INGEST_TOKEN
 from .core.logging import RequestLogMiddleware, configure_logging, get_logger
 
 os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
@@ -27,6 +27,8 @@ from .sms.routes import router as sms_router
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     logger.info("SERVER_STARTUP")
+    if not SMS_INGEST_TOKEN:
+        logger.warning("sms ingest auth disabled")
     RELEASES_DIR.mkdir(parents=True, exist_ok=True)
     task = asyncio.create_task(poller_loop())
     yield

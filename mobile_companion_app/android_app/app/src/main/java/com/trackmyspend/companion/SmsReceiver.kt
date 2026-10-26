@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.provider.Telephony
+import android.util.Log
 import java.util.concurrent.Executors
 
 class SmsReceiver : BroadcastReceiver() {
@@ -34,6 +35,8 @@ class SmsReceiver : BroadcastReceiver() {
                         UploadWorker.enqueue(appContext, message.messageId)
                     }
                 }
+            } catch (error: Exception) {
+                Log.e(TAG, "sms receiver failed sender=$sender", error)
             } finally {
                 pending.finish()
             }
@@ -41,6 +44,7 @@ class SmsReceiver : BroadcastReceiver() {
     }
 
     companion object {
+        private const val TAG = "SmsReceiver"
         // ponytail: one thread is enough for tiny file appends before WorkManager takes over
         private val executor = Executors.newSingleThreadExecutor()
     }

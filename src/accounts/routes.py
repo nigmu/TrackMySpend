@@ -30,6 +30,7 @@ def gmail_callback(
     try:
         result = service.complete_connect(code, state, db)
     except ValueError as exc:
+        logger.warning("oauth callback rejected reason=%s", exc)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         logger.exception("oauth callback failed")

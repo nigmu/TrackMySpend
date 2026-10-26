@@ -38,6 +38,7 @@ def ingest_and_parse_sms(
     _: None = Depends(require_sms_token),
 ):
     try:
+        row_id = None
         row_id, inserted = db.insert_sms(
             conn,
             sender=payload.sender,
@@ -45,35 +46,38 @@ def ingest_and_parse_sms(
             received_at=payload.received_at,
             device_id=payload.device_id,
         )
+        if not inserted:
+            logger.info(
+                "sms ingest duplicate id=%s sender=%s message_id=%s",
+                row_id,
+                payload.sender,
+                payload.message_id,
+            )
+            insert_event_log(
+                "sms.ingest_duplicate",
+                "sms",
+                f"SMS duplicate skipped id={row_id}",
+                context={
+                    "id": row_id,
+                    "message_id": payload.message_id,
+                    "sender": payload.sender,
+                    "device_id": payload.device_id,
+                },
+            )
+            return {"status": "ok", "id": row_id, "duplicate": True}
+        result = parse_new_sms(conn, row_id, payload.body)
     except Exception:
         logger.exception(
-            "sms ingest insert failed sender=%s message_id=%s",
+            "sms ingest failed id=%s sender=%s message_id=%s",
+            row_id,
             payload.sender,
             payload.message_id,
         )
         insert_event_log(
             "sms.ingest_failed",
             "sms",
-            "SMS ingest insert failed",
+            "SMS ingest failed" if row_id is None else f"SMS ingest failed id={row_id}",
             severity="error",
-            context={
-                "message_id": payload.message_id,
-                "sender": payload.sender,
-                "device_id": payload.device_id,
-            },
-        )
-        raise
-    if not inserted:
-        logger.info(
-            "sms ingest duplicate id=%s sender=%s message_id=%s",
-            row_id,
-            payload.sender,
-            payload.message_id,
-        )
-        insert_event_log(
-            "sms.ingest_duplicate",
-            "sms",
-            f"SMS duplicate skipped id={row_id}",
             context={
                 "id": row_id,
                 "message_id": payload.message_id,
@@ -81,24 +85,35 @@ def ingest_and_parse_sms(
                 "device_id": payload.device_id,
             },
         )
-        return {"status": "ok", "id": row_id, "duplicate": True}
-    result = parse_new_sms(conn, row_id, payload.body)
-    logger.info(
-        "sms ingest accepted id=%s sender=%s message_id=%s",
+        raise
+    template = result.template or result.category_id or "none"
+    reason = result.reason or "none"
+    log = logger.warning if result.processing_status == "unmatched" else logger.info
+    log(
+        "sms ingest accepted id=%s sender=%s message_id=%s processing_status=%s template=%s reason=%s",
         row_id,
         payload.sender,
         payload.message_id,
+        result.processing_status,
+        template,
+        reason,
     )
     insert_event_log(
         "sms.ingest_accepted",
         "sms",
-        f"SMS ingested id={row_id}",
+        (
+            f"SMS ingested id={row_id} processing_status={result.processing_status}"
+            f" template={template} reason={reason}"
+        ),
+        severity="warning" if result.processing_status == "unmatched" else "info",
         context={
             "id": row_id,
             "message_id": payload.message_id,
             "sender": payload.sender,
             "device_id": payload.device_id,
             "processing_status": result.processing_status,
+            "template": template,
+            "reason": reason,
         },
     )
     return {
@@ -112,10 +127,17 @@ def ingest_and_parse_sms(
 @router.post("/sms/parse_all")
 def parse_all_sms(conn: Connection = Depends(get_db)):
     counts = reparse_all_sms(conn)
+    message = (
+        f"SMS parse all total={counts['total']} done={counts['done']}"
+        f" ignored={counts['ignored']} unmatched={counts['unmatched']}"
+    )
+    severity = "warning" if counts["unmatched"] else "info"
+    getattr(logger, severity)(message)
     insert_event_log(
         "sms.parse_all",
         "sms",
-        f"SMS parse all total={counts['total']} done={counts['done']} ignored={counts['ignored']} unmatched={counts['unmatched']}",
+        message,
+        severity=severity,
         context=counts,
     )
     return counts
@@ -128,12 +150,6 @@ def get_latest_received_at(
     _: None = Depends(require_sms_token),
 ):
     latest = db.latest_received_at(conn, device_id)
-    insert_event_log(
-        "sms.watermark_fetched",
-        "sms",
-        "SMS watermark fetched",
-        context={"device_id": device_id, "received_at": latest.isoformat() if latest else None},
-    )
     return {"received_at": latest.isoformat() if latest else None}
 
 
