@@ -3,7 +3,7 @@
 A template captures the transaction amount (for example ``Rs.255.5`` or
 ``Txn Amt:INR299.00``). This function reads that span only. It does not search
 a whole SMS, so a later available balance or credit limit cannot become the
-transaction. Not the mail amount parser.
+transaction.
 """
 
 from __future__ import annotations

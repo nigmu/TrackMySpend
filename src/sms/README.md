@@ -1,6 +1,6 @@
 # SMS decisions
 
-Companion 2.0.4 drops OTP texts on the phone. Messages that still arrive are classified by the templates below into `transactions_sms`. `POST /sms/ingest_and_parse` inserts a new row in `raw_sms_data`, classifies, writes `transactions_sms` when the classification has a ledger, sets `processing_status`, then commits. A duplicate upload leaves both tables unchanged. `POST /sms/parse` reclassifies one stored raw SMS and updates that ledger row in place. `GET /sms/transactions` lists the ledger, including manual rows. Gmail `GET /transactions` does not include SMS.
+Companion 2.0.4 drops OTP texts on the phone. Messages that still arrive are classified by the templates below into `transactions_sms`. `POST /sms/ingest_and_parse` inserts a new row in `raw_sms_data`, classifies, writes `transactions_sms` when the classification has a ledger, sets `processing_status`, then commits. A duplicate upload leaves both tables unchanged. `POST /sms/parse` reclassifies one stored raw SMS and updates that ledger row in place. `GET /sms/transactions` lists the ledger, including manual rows.
 
 ## Where a message goes
 
@@ -37,7 +37,7 @@ PIN and password alerts are not filtered on the phone. This export has change no
 
 ## transactions_sms
 
-Mail `transactions` stays mail-only. Parsed SMS rows go to `transactions_sms`.
+Parsed SMS rows go to `transactions_sms`.
 
 `raw_sms_id` is `BIGINT UNIQUE REFERENCES raw_sms_data (id) ON DELETE CASCADE`, and null for a manual ledger row. One ledger row per raw SMS. Deleting the raw row deletes its ledger row. A manual row has no raw SMS to delete.
 

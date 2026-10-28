@@ -1,5 +1,3 @@
-import asyncio
-import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -10,17 +8,12 @@ from fastapi.staticfiles import StaticFiles
 from .core.config import CORS_ORIGINS, SMS_INGEST_TOKEN
 from .core.logging import RequestLogMiddleware, configure_logging, get_logger
 
-os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
 configure_logging()
 logger = get_logger(__name__)
 
-from .accounts.routes import router as accounts_router
 from .companion.routes import RELEASES_DIR
 from .companion.routes import router as companion_router
-from .filters.routes import router as filters_router
 from .logs.routes import router as logs_router
-from .mail.poller import poller_loop
-from .mail.routes import router as mail_router
 from .sms.routes import router as sms_router
 
 
@@ -30,13 +23,7 @@ async def lifespan(_app: FastAPI):
     if not SMS_INGEST_TOKEN:
         logger.warning("sms ingest auth disabled")
     RELEASES_DIR.mkdir(parents=True, exist_ok=True)
-    task = asyncio.create_task(poller_loop())
     yield
-    task.cancel()
-    try:
-        await task
-    except asyncio.CancelledError:
-        pass
     logger.info("SERVER_SHUTDOWN")
 
 
@@ -56,14 +43,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Two independent data pipelines, each with its own raw table and its own routes:
-#   mail  (src/mail)  Gmail OAuth -> sync -> raw_mail_data -> parse -> transactions
-#   sms   (src/sms)   TMS Companion -> POST /sms/ingest_and_parse stores the raw row and classifies it before commit
-# Shared/cross-cutting: accounts (Gmail OAuth creds), filters (Gmail sender_filters),
-# logs (app_event_logs), companion (TMS Companion OTA distribution).
-app.include_router(accounts_router)
-app.include_router(filters_router)
-app.include_router(mail_router)
+# SMS pipeline (src/sms): TMS Companion -> POST /sms/ingest_and_parse stores the
+# raw row and classifies it before commit.
+# logs (app_event_logs) and companion (TMS Companion OTA) sit beside it.
 app.include_router(sms_router)
 app.include_router(logs_router)
 app.include_router(companion_router)

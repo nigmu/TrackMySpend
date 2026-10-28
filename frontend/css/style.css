@@ -50,7 +50,6 @@ body {
 .page { display: none; }
 .page.active { display: block; }
 h2 { margin-top: 0; }
-.row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin: 0.75rem 0; }
 button {
   font: inherit;
   padding: 0.4rem 0.75rem;
@@ -59,7 +58,6 @@ button {
   color: #fff;
   cursor: pointer;
 }
-button.danger { background: var(--danger); border-color: var(--danger); }
 .status-card { padding: 0.75rem 1rem; background: var(--card); border: 1px solid var(--line); }
 .status-card.ok { border-color: var(--accent); }
 .status-card.err, .err { color: var(--danger); }
@@ -69,13 +67,3 @@ button.danger { background: var(--danger); border-color: var(--danger); }
 table { width: 100%; border-collapse: collapse; background: var(--card); }
 th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--line); font-size: 0.95rem; vertical-align: top; }
 input[type="text"] { font: inherit; padding: 0.4rem 0.5rem; border: 1px solid var(--line); min-width: 16rem; }
-#toast {
-  position: fixed;
-  bottom: 1rem;
-  right: 1rem;
-  background: #1c1c1c;
-  color: #fff;
-  padding: 0.6rem 0.9rem;
-  max-width: 24rem;
-}
-#toast.err { background: var(--danger); }

@@ -27,21 +27,7 @@ async function apiFetch(path, options = {}) {
 
 const api = {
   health: () => apiFetch("/"),
-  listAccounts: () => apiFetch("/accounts"),
-  deleteAccount: (id) => apiFetch(`/accounts/${id}`, { method: "DELETE" }),
-  syncAll: () => apiFetch("/sync", { method: "POST" }),
-  syncOne: (id) => apiFetch(`/sync/${id}`, { method: "POST" }),
-  listFilters: () => apiFetch("/filters"),
-  addFilter: (pattern) =>
-    apiFetch("/filters", {
-      method: "POST",
-      body: JSON.stringify({ pattern }),
-    }),
-  deleteFilter: (id) => apiFetch(`/filters/${id}`, { method: "DELETE" }),
-  parse: () => apiFetch("/parse", { method: "POST" }),
-  listMails: () => apiFetch("/mails"),
   listSms: () => apiFetch("/sms"),
   listSmsTransactions: () => apiFetch("/sms/transactions"),
   listLogs: () => apiFetch("/logs"),
-  listTransactions: () => apiFetch("/transactions"),
 };

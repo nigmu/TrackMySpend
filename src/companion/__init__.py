@@ -1,5 +1,4 @@
 """TMS Companion distribution: OTA update manifest + APK static files.
 
-Not part of either data pipeline — this is app distribution, unrelated to
-mail or SMS data itself.
+App distribution. It does not read or write SMS rows.
 """

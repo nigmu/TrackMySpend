@@ -27,8 +27,8 @@ def resolve_public_urls(
     public_host: str,
     api_public_base: str = "",
     frontend_origin: str = "",
-) -> tuple[str, str, str]:
-    """API base, UI origin, Google redirect. Explicit bases win over PUBLIC_HOST."""
+) -> tuple[str, str]:
+    """API base and UI origin. Explicit bases win over PUBLIC_HOST."""
     host = (public_host or "localhost").strip() or "localhost"
     if "://" in host or ":" in host:
         raise ValueError(f"PUBLIC_HOST must be host only (no scheme/port): {host!r}")
@@ -36,7 +36,7 @@ def resolve_public_urls(
     fe = (frontend_origin or "").strip()
     api_out = normalize_origin(api) if api else f"http://{host}:2006"
     fe_out = normalize_origin(fe) if fe else f"http://{host}:2007"
-    return api_out, fe_out, f"{api_out}/auth/gmail/callback"
+    return api_out, fe_out
 
 
 def cors_allowlist(frontend_origin: str, extra: str = "") -> list[str]:
@@ -53,7 +53,7 @@ def cors_allowlist(frontend_origin: str, extra: str = "") -> list[str]:
 
 
 PUBLIC_HOST = (os.environ.get("PUBLIC_HOST") or "localhost").strip() or "localhost"
-API_PUBLIC_BASE, FRONTEND_ORIGIN, GOOGLE_REDIRECT_URI = resolve_public_urls(
+API_PUBLIC_BASE, FRONTEND_ORIGIN = resolve_public_urls(
     PUBLIC_HOST,
     os.environ.get("API_PUBLIC_BASE", ""),
     os.environ.get("FRONTEND_ORIGIN", ""),
@@ -67,20 +67,12 @@ DATABASE_URL = os.environ.get(
     "DATABASE_URL",
     "postgresql://postgres:postgres@127.0.0.1:5432/trackmyspend",
 )
-GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
-GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
-ENCRYPTION_KEY = os.environ.get("ENCRYPTION_KEY", "")
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 LOG_DIR = os.environ.get("LOG_DIR", "logs")
 LOG_FILE_MAX_BYTES = int(os.environ.get("LOG_FILE_MAX_BYTES", "2000000"))
 LOG_FILE_BACKUP_COUNT = int(os.environ.get("LOG_FILE_BACKUP_COUNT", "3"))
 LOG_JSON = os.environ.get("LOG_JSON", "false").lower() in ("1", "true", "yes")
 SMS_INGEST_TOKEN = os.environ.get("SMS_INGEST_TOKEN", "")
-
-GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
-BOOTSTRAP_MESSAGE_COUNT = 50
-POLLER_TICK_SEC = 60
-PARSE_BATCH_LIMIT = 200
 
 _FRONTEND_ENV_JS = Path(__file__).resolve().parents[2] / "frontend" / "js" / "env.js"
 
@@ -98,6 +90,5 @@ def write_frontend_env() -> Path:
 
 write_frontend_env()
 
-assert GOOGLE_REDIRECT_URI == f"{API_PUBLIC_BASE}/auth/gmail/callback"
 assert API_PUBLIC_BASE == normalize_origin(API_PUBLIC_BASE)
 assert FRONTEND_ORIGIN == normalize_origin(FRONTEND_ORIGIN)

@@ -1,11 +1,10 @@
 # TrackMySpend
 
-TrackMySpend collects bank alerts from Gmail and Android SMS.
+TrackMySpend records bank alerts from Android SMS.
 
-- **Gmail alerts** are filtered, stored, and parsed into transactions.
-- **SMS alerts** are sent by TMS Companion. A new message is stored and classified in the same request. `POST /sms/parse` reclassifies one stored SMS.
+TMS Companion sends each matching SMS to this API. A new message is stored and classified in the same request. `POST /sms/parse` reclassifies one stored SMS.
 
-Both pipelines use the same FastAPI service and PostgreSQL database. The web UI is a separate static site.
+The API is a FastAPI service with a PostgreSQL database. The web UI is a separate static site.
 
 - Python: 3.12 or newer
 - API: port `2006`
@@ -14,61 +13,13 @@ Both pipelines use the same FastAPI service and PostgreSQL database. The web UI 
 
 ## How data flows
 
-### Gmail
-
-1. The user connects a Gmail account through OAuth.
-2. TrackMySpend reads Gmail message metadata using the readonly Gmail scope.
-3. Global sender filters keep only matching bank emails.
-4. Matching messages are stored in `raw_mail_data`.
-5. The parser extracts the first `Rs` or `INR` amount from the subject and snippet.
-6. The amount is stored as integer paisa in `transactions`.
-
-### SMS
-
 1. TMS Companion receives an SMS on an Android phone.
 2. The phone applies its own local sender filters.
 3. Matching messages are sent to `POST /sms/ingest_and_parse`.
 4. A new SMS: the same request inserts `raw_sms_data`, classifies, writes `transactions_sms` when the classification has a ledger, sets `processing_status`, then commits. A duplicate upload leaves both tables unchanged.
 5. `GET /sms/transactions` lists SMS ledger rows and manual ledger rows. The web **SMS** page shows the raw messages and that ledger.
 
-Gmail filters and Android filters are separate. Gmail `GET /transactions` does not include SMS.
-
 ## Features
-
-### Gmail accounts
-
-- **Google OAuth:** `GET /auth/gmail/connect` starts a Gmail readonly OAuth flow. Google returns to `GET /auth/gmail/callback`.
-- **Multiple accounts:** the Accounts page lists every connected Gmail account and its last polling time.
-- **Encrypted tokens:** OAuth access and refresh tokens are encrypted with Fernet before they are stored in PostgreSQL.
-- **Account removal:** connected accounts can be removed from the UI or with `DELETE /accounts/{account_id}`.
-
-### Gmail synchronization
-
-- **Initial sync:** the first sync searches for the latest 50 messages that match a configured sender filter.
-- **Incremental sync:** later syncs use Gmail's History API to request only new messages.
-- **Stale-history recovery:** if Gmail expires a saved history ID, TrackMySpend automatically performs another initial search.
-- **Automatic polling:** the API checks for due accounts every minute. Each account is polled every 15 minutes by default.
-- **Manual sync:** the UI can sync one account or all accounts through `POST /sync/{account_id}` and `POST /sync`.
-- **Duplicate prevention:** Gmail message IDs are unique in `raw_mail_data`, so the same email is not stored twice.
-- **Automatic parsing:** each manual or scheduled sync runs the pending-mail parser after ingestion.
-
-### Gmail sender filters
-
-- Filters are case-insensitive sender substrings. For example, `hdfcbank.bank.in` matches an address containing that text.
-- Filters are shared by all connected Gmail accounts.
-- The Filters page can list, add, and delete them through `GET /filters`, `POST /filters`, and `DELETE /filters/{filter_id}`.
-- A Gmail sync is skipped when there are no active filters.
-
-These filters apply only to Gmail. TMS Companion keeps its SMS filters on the phone.
-
-### Mail and transactions
-
-- **Raw Mail page:** shows received time, sender, subject, processing state, and the filter that matched.
-- **Amount parsing:** the parser recognizes values beginning with `Rs`, `Rs.`, or `INR`, including commas and decimals.
-- **Integer storage:** amounts are converted to paisa before database storage. For example, `Rs. 1,234.56` becomes `123456`.
-- **Processing states:** raw mail is marked `pending`, `processing`, `done`, or `failed`.
-- **Manual parse:** `POST /parse` retries the current batch of pending email rows.
-- **Transactions page:** `GET /transactions` returns parsed Gmail amounts together with their source email details.
 
 ### SMS ingestion
 
@@ -78,7 +29,7 @@ These filters apply only to Gmail. TMS Companion keeps its SMS filters on the ph
 - The API hashes the sender, body, and device ID (`content_hash`). A unique index prevents retries and live-vs-inbox reuploads from creating duplicate rows. `received_at` is stored but not part of the hash.
 - A new SMS: the same request inserts `raw_sms_data`, classifies, writes `transactions_sms` when the classification has a ledger, sets `processing_status`, then commits. A duplicate upload leaves both tables unchanged.
 - `GET /sms` returns the stored raw SMS records ordered by `received_at` (newest first), not by insert `id`.
-- `GET /sms/transactions` lists the ledger. Gmail `GET /transactions` does not include SMS.
+- `GET /sms/transactions` lists the ledger.
 
 ### SMS ledger
 
@@ -104,14 +55,10 @@ See [TMS Companion documentation](mobile_companion_app/README.md) for Android fe
 
 ### Web UI
 
-The frontend is plain HTML, CSS, and JavaScript. It has seven pages:
+The frontend is plain HTML, CSS, and JavaScript. It has three pages:
 
-- **Home:** API status and totals for accounts, filters, mail, SMS, transactions, and events.
-- **Accounts:** connect, list, sync, and remove Gmail accounts; sync all accounts or parse pending mail.
-- **Filters:** add and delete Gmail sender filters.
-- **Mail:** inspect raw matching Gmail alerts and processing states.
+- **Home:** API status and totals for SMS, ledger rows, and events.
 - **SMS:** inspect raw messages from TMS Companion and the SMS ledger.
-- **Transactions:** view amounts parsed from Gmail. This list does not include SMS.
 - **Logs:** view important application events.
 
 The sidebar's **API base** field can temporarily point the UI at another API server. Its default comes from `API_PUBLIC_BASE` through generated file `frontend/js/env.js`.
@@ -137,9 +84,7 @@ Four places hold logs. They are not copies of each other.
 | Phone file `outbox_messages.json`, shown on the companion **Log** tab | Each SMS the phone queued, plus a failed backfill |
 | Android logcat, tag `SmsReceiver` | A crash while the phone is saving or queueing an SMS |
 
-`sync_runs` stores each Gmail sync's counts in PostgreSQL. It is not shown on the Logs page. The sync event message on that page already includes seen, inserted, skipped, and failed.
-
-Nothing in any of these logs includes an SMS body, a mail body, an OAuth code, a token, or `ENCRYPTION_KEY`.
+Nothing in any of these logs includes an SMS body or `SMS_INGEST_TOKEN`.
 
 ### File log
 
@@ -147,9 +92,9 @@ Nothing in any of these logs includes an SMS body, a mail body, an OAuth code, a
 
 `main.py` turns Uvicorn's own access log off. The API middleware writes one line per HTTP request instead: method, path, status, duration in milliseconds, client address, and request id. A supplied `X-Request-ID` is kept. Otherwise the API generates one and returns it on the response. A crashed request is logged with the traceback.
 
-At INFO you also get startup and shutdown, SMS ingest, Gmail sync, mail parse, OAuth failures, filter changes, poller start and stop, and migration. Idle poller ticks are silent. A tick that throws is logged here and not in `app_event_logs`, because that database write would be down too.
+At INFO you also get startup and shutdown, SMS ingest, and migration.
 
-Warnings include a rejected SMS token, an empty `SMS_INGEST_TOKEN` at startup (ingest is open), an unmatched SMS, a partial mail parse, a stale Gmail history id, a Gmail date header that did not parse, a rejected OAuth state, and a missing companion manifest. The OAuth warning is the reason only. The code and the state are not logged. A bad Gmail token decrypt is the existing sync-failed line with `reason=token_decrypt_failed`.
+Warnings include a rejected SMS token, an empty `SMS_INGEST_TOKEN` at startup (ingest is open), an unmatched SMS, and a missing companion manifest.
 
 A successful companion update check is DEBUG, so it does not appear at the default level. Manifest failures stay at warning or error.
 
@@ -166,15 +111,6 @@ These events are written:
 | `sms.ingest_accepted` | A new SMS was stored and classified. Warning when status is `unmatched`. The message includes `processing_status`, `template`, and `reason` (`none`, `no_template`, or `amount_unparsed`). |
 | `sms.ingest_duplicate` | The upload matched an existing `content_hash`. No new `raw_sms_data` row. The message names the existing row id. |
 | `sms.ingest_failed` | Insert or classification threw. The message includes the raw id when the insert had already returned one. |
-| `gmail.sync_started` | A sync run started. |
-| `gmail.sync_completed` | Sync finished or was skipped because there are no sender filters. The done message includes seen, inserted, skipped, and failed. |
-| `gmail.sync_failed` | Sync threw. The message includes the error, or `reason=token_decrypt_failed`. |
-| `parse.completed` | A mail parse batch finished. Warning when some rows failed. The message lists up to 20 failed raw-mail ids, then `+N`. |
-| `parse.failed` | Every claimed mail row failed. |
-| `gmail.connected` | A Gmail account was connected. |
-| `gmail.removed` | A Gmail account was removed. |
-| `filter.added` | A Gmail sender filter was added. |
-| `filter.deleted` | A Gmail sender filter was deleted. The message includes the pattern. |
 | `companion.manifest_missing` | `releases/companion/update.json` is not there. Warning. A fallback manifest is still served. |
 | `companion.manifest_unreadable` | That file exists and is not valid JSON. Error. |
 | `backfill.after_server_save`, `backfill.on_open`, `backfill.manual` | The phone posts `POST /logs/event` after a backfill that enqueued at least one SMS. Warning when the scan hit its row cap. |
@@ -184,7 +120,7 @@ These are not activity events. The HTTP line in `app.log` is enough:
 - `GET /sms/latest-received-at` (the phone watermark)
 - A companion update check that succeeds
 - A backfill that enqueued nothing and had no error
-- List endpoints, health, and an idle poller tick
+- List endpoints and health
 
 A phone backfill count and `raw_sms_data` can differ by the duplicate events. The phone counts an outbox row when sender, body, and received time are new. The server hash is sender, body, and device id, so a second upload of the same text with a different time is `sms.ingest_duplicate` and does not insert. To find that pair, list the events, take the duplicate's `id` in the message (the existing raw row), and find the `sms.ingest_accepted` event with the same context id. The two `message_id` values are the two rows in a phone export.
 
@@ -208,24 +144,6 @@ Exporting that file and counting rows counts the phone outbox, not `raw_sms_data
 - `GET /health` — lightweight health check used by TMS Companion.
 - `GET /docs` — interactive FastAPI documentation.
 
-### Gmail accounts
-
-- `GET /auth/gmail/connect` — start Gmail OAuth.
-- `GET /auth/gmail/callback` — complete Gmail OAuth.
-- `GET /accounts` — list connected accounts.
-- `DELETE /accounts/{account_id}` — remove an account.
-
-### Filters and mail
-
-- `GET /filters` — list Gmail sender filters.
-- `POST /filters` — add or reactivate a filter.
-- `DELETE /filters/{filter_id}` — delete a filter.
-- `POST /sync` — sync all active Gmail accounts, then parse pending mail.
-- `POST /sync/{account_id}` — sync one account, then parse pending mail.
-- `GET /mails` — list raw matching Gmail messages.
-- `POST /parse` — parse pending raw mail.
-- `GET /transactions` — list parsed Gmail transactions.
-
 ### SMS and logs
 
 - `POST /sms/ingest_and_parse` — receive an SMS from TMS Companion. A new row is stored and classified before commit. A duplicate leaves both tables unchanged.
@@ -234,7 +152,7 @@ Exporting that file and counting rows counts the phone outbox, not `raw_sms_data
 - `PATCH /sms/transactions/{id}` — update ledger fields on either row type. `raw_sms_id`, `template_name`, and `created_at` stay as they are. `updated_at` becomes server time.
 - `DELETE /sms/transactions/{id}` — delete a ledger row. The raw SMS is left as it is.
 - `GET /sms` — list raw SMS messages.
-- `GET /sms/transactions` — list the SMS ledger. Gmail `GET /transactions` does not include these rows.
+- `GET /sms/transactions` — list the SMS ledger.
 - `GET /logs` — list application events. See [Logs](#logs).
 - `POST /logs/event` — phone posts a backfill event. Same token header as SMS ingest when `SMS_INGEST_TOKEN` is set.
 
@@ -243,18 +161,15 @@ Exporting that file and counting rows counts the phone outbox, not `raw_sms_data
 - `GET /app/update.json` — return the Android update manifest. A path in `apk_url` is prefixed with `API_PUBLIC_BASE`.
 - `GET /releases/{filename}` — download a published APK.
 
-`GET /mails`, `GET /transactions`, `GET /sms`, `GET /sms/transactions`, and `GET /logs` accept `limit` and `offset`. The default limit is 50 and the maximum is 200.
+`GET /sms`, `GET /sms/transactions`, and `GET /logs` accept `limit` and `offset`. The default limit is 50 and the maximum is 200.
 
 ## Project layout
 
 ```text
-src/accounts/                     Gmail OAuth and connected accounts
-src/filters/                      Gmail sender filters
-src/mail/                         Gmail sync, polling, storage, and parsing
 src/sms/                          SMS ingest, one-row parse, and the SMS ledger
 src/logs/                         Persistent application events
 src/companion/                    Android update manifest route
-src/core/                         Configuration, logging, encryption, and amount parsing
+src/core/                         Configuration and logging
 src/db/                           PostgreSQL schema and migrations
 frontend/                         Static web UI
 mobile_companion_app/android_app/ TMS Companion Android source
@@ -304,7 +219,7 @@ cp .env.example .env
 Copy-Item .env.example .env
 ```
 
-At minimum, set `DATABASE_URL`. Gmail also requires Google OAuth values and `ENCRYPTION_KEY`.
+At minimum, set `DATABASE_URL`. Set `SMS_INGEST_TOKEN` when the API is reachable from the internet.
 
 ### 3. Install and migrate
 
@@ -312,11 +227,8 @@ With the virtual environment active:
 
 ```bash
 pip install -e .
-python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 python -m src.db.migrate
 ```
-
-Copy the generated key into `.env` as `ENCRYPTION_KEY`. Keep the same key after accounts are connected; changing it makes stored Gmail tokens unreadable.
 
 ### 4. Start the API
 
@@ -330,7 +242,7 @@ Open `http://localhost:2006/health`. The expected response is:
 {"status":"ok"}
 ```
 
-Starting the API also starts the Gmail poller and writes the frontend API configuration.
+Starting the API writes the frontend API configuration.
 
 ### 5. Start the web UI
 
@@ -342,29 +254,14 @@ python -m http.server 2007 --directory frontend
 
 Open `http://localhost:2007`.
 
-### 6. Connect Gmail
-
-1. Configure a Google Cloud OAuth client with the Gmail readonly scope.
-2. Register `{API_PUBLIC_BASE}/auth/gmail/callback` as an authorized redirect URI.
-3. Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `API_PUBLIC_BASE`, and `FRONTEND_ORIGIN` in `.env`.
-4. Restart the API.
-5. Open the matching frontend origin and select **Accounts → Connect Gmail**.
-6. Add at least one Gmail sender filter.
-7. Select **Sync all**.
-
-Use a registered public hostname or localhost for OAuth. Google does not accept ordinary LAN IP addresses as web redirect URIs.
-
 ## Environment settings
 
 - `DATABASE_URL` — PostgreSQL connection string.
-- `GOOGLE_CLIENT_ID` — Google OAuth client ID.
-- `GOOGLE_CLIENT_SECRET` — Google OAuth client secret.
-- `ENCRYPTION_KEY` — Fernet key used to encrypt Gmail tokens.
 - `API_PUBLIC_BASE` — public API origin, without a path or trailing slash.
-- `FRONTEND_ORIGIN` — public web UI origin used for OAuth return and CORS.
+- `FRONTEND_ORIGIN` — public web UI origin used for CORS.
 - `CORS_EXTRA_ORIGINS` — comma-separated LAN or Tailscale UI origins.
 - `PUBLIC_HOST` — fallback host only; derives `http://<host>:2006` and `http://<host>:2007` when explicit public origins are unset.
-- `SMS_INGEST_TOKEN` — optional shared token required by `POST /sms/ingest_and_parse`.
+- `SMS_INGEST_TOKEN` — optional shared token required by `POST /sms/ingest_and_parse` and `POST /logs/event`.
 - `LOG_LEVEL` — Python log level; defaults to `INFO`.
 - `LOG_DIR` — log directory; defaults to `logs`.
 - `LOG_JSON` — use JSON log lines when set to `true`.
@@ -409,7 +306,6 @@ That discover loads the HDFC SMS parser checks in `src/sms/test_hdfc.py`.
 Small module self-checks are also available:
 
 ```bash
-python -m src.core.amount
 python -m src.sms.db
 ```
 

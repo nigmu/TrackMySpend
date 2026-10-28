@@ -25,7 +25,7 @@ def insert_event_log(
         conn.commit()
     except Exception:
         # Best-effort: a failure to write to the event log must never break
-        # the caller's real operation (SMS ingest, Gmail sync, etc). Log it
+        # the caller's real operation. Log it
         # to the file logger instead of raising.
         conn.rollback()
         logger.exception("event log insert failed type=%s source=%s", event_type, source)

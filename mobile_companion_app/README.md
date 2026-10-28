@@ -17,14 +17,14 @@ The API is the main TrackMySpend service (`python main.py`, port **2006**). Ther
 3. A matching message is saved to the durable local outbox before any upload starts. An OTP text is not saved. The Log gets a row labeled `OTP ignored` and nothing is uploaded.
 4. WorkManager sends it to `POST /sms/ingest_and_parse` when a network is available.
 5. A new SMS: the same request inserts `raw_sms_data`, classifies, writes `transactions_sms` when the classification has a ledger (a debit, credit, bill reminder, or balance), sets `processing_status`, then commits. A duplicate upload leaves both tables unchanged.
-6. Delivery details appear in the phone's **Log** tab. Stored messages and server events are available through `GET /sms` and `GET /logs`. `GET /sms/transactions` lists the ledger. The phone does not edit ledger rows. Gmail `GET /transactions` does not include SMS.
+6. Delivery details appear in the phone's **Log** tab. Stored messages and server events are available through `GET /sms` and `GET /logs`. `GET /sms/transactions` lists the ledger. The phone does not edit ledger rows.
 
 ## Features
 
 ### SMS capture and filtering
 
 - **Background SMS reception:** `SmsReceiver` handles Android's `SMS_RECEIVED` broadcast, joins multipart messages, and records the sender, body, and received time. An SMS that contains `OTP` and a 6-digit code that is not a `Rs` or `INR` amount is not stored. The outbox row says `OTP ignored`.
-- **Sender filters:** matching uses a case-insensitive sender substring. For example, `HDFCBK` matches a sender such as `VM-HDFCBK`. Filters are stored only on the phone and are separate from the Gmail filters in the web app.
+- **Sender filters:** matching uses a case-insensitive sender substring. For example, `HDFCBK` matches a sender such as `VM-HDFCBK`. Filters are stored only on the phone.
 - **Missed-message recovery:** catch-up is cursor-based, not a blind 48h rescan.
   - **After saving a server while the outbox is empty** (first install / reinstall): the app GETs `/sms/latest-received-at` for this device (tries servers in priority order), snapshots that time once, then scans the inbox for matching SMS with `DATE >=` that watermark (or the last **X** hours if the DB has no rows). The boundary SMS may re-upload; the server `content_hash` (sender+body+device_id) drops duplicates even when `received_at` differs slightly.
   - **On later opens** (outbox already has rows): scan from the max local outbox `receivedAt` only — no server watermark.
