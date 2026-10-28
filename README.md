@@ -3,7 +3,7 @@
 TrackMySpend collects bank alerts from Gmail and Android SMS.
 
 - **Gmail alerts** are filtered, stored, and parsed into transactions.
-- **SMS alerts** are sent by TMS Companion. A new message is stored and classified in the same request. **Parse all** on the SMS page reclassifies every stored SMS.
+- **SMS alerts** are sent by TMS Companion. A new message is stored and classified in the same request. `POST /sms/parse` reclassifies one stored SMS.
 
 Both pipelines use the same FastAPI service and PostgreSQL database. The web UI is a separate static site.
 
@@ -29,8 +29,7 @@ Both pipelines use the same FastAPI service and PostgreSQL database. The web UI 
 2. The phone applies its own local sender filters.
 3. Matching messages are sent to `POST /sms/ingest_and_parse`.
 4. A new SMS: the same request inserts `raw_sms_data`, classifies, writes `transactions_sms` when the classification has a ledger, sets `processing_status`, then commits. A duplicate upload leaves both tables unchanged.
-5. **Parse all** on the SMS page calls `POST /sms/parse_all`, reclassifies every raw row, deletes and rewrites that row's ledger, and returns `total`, `done`, `ignored`, `unmatched`.
-6. `GET /sms/transactions` lists the ledger. The web **SMS** page shows the raw messages and that ledger.
+5. `GET /sms/transactions` lists SMS ledger rows and manual ledger rows. The web **SMS** page shows the raw messages and that ledger.
 
 Gmail filters and Android filters are separate. Gmail `GET /transactions` does not include SMS.
 
@@ -78,9 +77,26 @@ These filters apply only to Gmail. TMS Companion keeps its SMS filters on the ph
 - When `SMS_INGEST_TOKEN` is configured, the request must include the same value in `X-TrackMySpend-Token`.
 - The API hashes the sender, body, and device ID (`content_hash`). A unique index prevents retries and live-vs-inbox reuploads from creating duplicate rows. `received_at` is stored but not part of the hash.
 - A new SMS: the same request inserts `raw_sms_data`, classifies, writes `transactions_sms` when the classification has a ledger, sets `processing_status`, then commits. A duplicate upload leaves both tables unchanged.
-- **Parse all** on the SMS page calls `POST /sms/parse_all`, reclassifies every raw row, deletes and rewrites that row's ledger, and returns `total`, `done`, `ignored`, `unmatched`.
 - `GET /sms` returns the stored raw SMS records ordered by `received_at` (newest first), not by insert `id`.
 - `GET /sms/transactions` lists the ledger. Gmail `GET /transactions` does not include SMS.
+
+### SMS ledger
+
+`transactions_sms` holds SMS ledger rows and manual ledger rows. An SMS ledger row comes from one raw SMS. A manual ledger row is typed in: `raw_sms_id` is null and `template_name` is `manual`. The list includes both. A manual row has no `sender` or `device_id`. These routes do not use `SMS_INGEST_TOKEN`.
+
+`kind` is `debit`, `credit`, or `bill_reminder`. `amount_paisa` is required except on a bill reminder. Blank `instrument`, `account_mask`, `counterparty`, and `reference` are stored as null.
+
+`created_at` and `updated_at` are server time. The client does not send them. On insert they match. A later update moves only `updated_at`.
+
+`POST /sms/transactions` creates a manual row. Send `kind` and, except for a bill reminder, `amount_paisa`. `instrument`, `account_mask`, `counterparty`, `reference`, and `sms_received_at` are optional. Omit `sms_received_at` and it matches `created_at`. The response is the saved row.
+
+`PATCH /sms/transactions/{id}` changes those same fields on either row type. Omitted fields stay. Null clears an optional text field. `kind` and `sms_received_at` cannot be null. `raw_sms_id`, `template_name`, and `created_at` cannot be changed, and any other field is rejected. An empty body is 400. A missing id is 404. The response is the saved row.
+
+`DELETE /sms/transactions/{id}` removes the ledger row and returns `{"status": "deleted", "id": <id>}`. The raw SMS and its processing status stay as they are. A later parse of that raw SMS can insert a new SMS ledger row. A deleted manual row stays deleted.
+
+`POST /sms/parse` takes `{"raw_sms_id": <id>}`. An unknown id is 404. The response is `raw_sms_id`, `processing_status`, and `transaction` (the ledger row, or null).
+
+When that classification has a ledger, the SMS ledger row is updated in place: same `id`, same `created_at`. `kind`, `amount_paisa`, `instrument`, `account_mask`, `counterparty`, `reference`, `template_name`, and `sms_received_at` are replaced. `sms_received_at` goes back to the phone's time. `updated_at` becomes server time. If no ledger row exists yet, one is inserted. When the classification has no ledger, that SMS ledger row is deleted. Hand edits on that row do not survive this call. Manual ledger rows are never involved. There is no bulk reparse.
 
 See [TMS Companion documentation](mobile_companion_app/README.md) for Android features, setup, delivery retries, and updates.
 
@@ -92,7 +108,7 @@ The frontend is plain HTML, CSS, and JavaScript. It has seven pages:
 - **Accounts:** connect, list, sync, and remove Gmail accounts; sync all accounts or parse pending mail.
 - **Filters:** add and delete Gmail sender filters.
 - **Mail:** inspect raw matching Gmail alerts and processing states.
-- **SMS:** inspect raw messages from TMS Companion and the SMS ledger. **Parse all** reclassifies every stored SMS.
+- **SMS:** inspect raw messages from TMS Companion and the SMS ledger.
 - **Transactions:** view amounts parsed from Gmail. This list does not include SMS.
 - **Logs:** view important application events.
 
@@ -148,7 +164,6 @@ These events are written:
 | `sms.ingest_accepted` | A new SMS was stored and classified. Warning when status is `unmatched`. The message includes `processing_status`, `template`, and `reason` (`none`, `no_template`, or `amount_unparsed`). |
 | `sms.ingest_duplicate` | The upload matched an existing `content_hash`. No new `raw_sms_data` row. The message names the existing row id. |
 | `sms.ingest_failed` | Insert or classification threw. The message includes the raw id when the insert had already returned one. |
-| `sms.parse_all` | Parse all finished. Warning when `unmatched` is greater than zero. Counts only. |
 | `gmail.sync_started` | A sync run started. |
 | `gmail.sync_completed` | Sync finished or was skipped because there are no sender filters. The done message includes seen, inserted, skipped, and failed. |
 | `gmail.sync_failed` | Sync threw. The message includes the error, or `reason=token_decrypt_failed`. |
@@ -212,7 +227,10 @@ Exporting that file and counting rows counts the phone outbox, not `raw_sms_data
 ### SMS and logs
 
 - `POST /sms/ingest_and_parse` — receive an SMS from TMS Companion. A new row is stored and classified before commit. A duplicate leaves both tables unchanged.
-- `POST /sms/parse_all` — reclassify every raw SMS, delete and rewrite that row's ledger, and return `total`, `done`, `ignored`, `unmatched`.
+- `POST /sms/parse` — reclassify one raw SMS by `raw_sms_id`. Updates that ledger row in place, inserts one if it was missing, or deletes it when the classification has no ledger.
+- `POST /sms/transactions` — create a manual ledger row. `template_name` is `manual` and `raw_sms_id` is null.
+- `PATCH /sms/transactions/{id}` — update ledger fields on either row type. `raw_sms_id`, `template_name`, and `created_at` stay as they are. `updated_at` becomes server time.
+- `DELETE /sms/transactions/{id}` — delete a ledger row. The raw SMS is left as it is.
 - `GET /sms` — list raw SMS messages.
 - `GET /sms/transactions` — list the SMS ledger. Gmail `GET /transactions` does not include these rows.
 - `GET /logs` — list application events. See [Logs](#logs).
@@ -231,7 +249,7 @@ Exporting that file and counting rows counts the phone outbox, not `raw_sms_data
 src/accounts/                     Gmail OAuth and connected accounts
 src/filters/                      Gmail sender filters
 src/mail/                         Gmail sync, polling, storage, and parsing
-src/sms/                          SMS ingest-and-parse, reparse, and the SMS ledger
+src/sms/                          SMS ingest, one-row parse, and the SMS ledger
 src/logs/                         Persistent application events
 src/companion/                    Android update manifest route
 src/core/                         Configuration, logging, encryption, and amount parsing

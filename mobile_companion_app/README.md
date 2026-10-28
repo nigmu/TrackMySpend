@@ -17,7 +17,7 @@ The API is the main TrackMySpend service (`python main.py`, port **2006**). Ther
 3. A matching message is saved to the durable local outbox before any upload starts. An OTP text is not saved. The Log gets a row labeled `OTP ignored` and nothing is uploaded.
 4. WorkManager sends it to `POST /sms/ingest_and_parse` when a network is available.
 5. A new SMS: the same request inserts `raw_sms_data`, classifies, writes `transactions_sms` when the classification has a ledger, sets `processing_status`, then commits. A duplicate upload leaves both tables unchanged.
-6. Delivery details appear in the phone's **Log** tab. Stored messages and server events are available through `GET /sms` and `GET /logs`. `GET /sms/transactions` lists the ledger. **Parse all** on the web SMS page calls `POST /sms/parse_all`, reclassifies every raw row, deletes and rewrites that row's ledger, and returns `total`, `done`, `ignored`, `unmatched`. Gmail `GET /transactions` does not include SMS.
+6. Delivery details appear in the phone's **Log** tab. Stored messages and server events are available through `GET /sms` and `GET /logs`. `GET /sms/transactions` lists the ledger. The phone does not edit ledger rows. Gmail `GET /transactions` does not include SMS.
 
 ## Features
 
@@ -77,6 +77,9 @@ LAN URLs such as `http://<host>:2006` are allowed. Do not add `/sms/ingest_and_p
 - `POST /sms/ingest_and_parse` — accept a message from the phone and classify a new row before commit.
 - `GET /sms/latest-received-at` — max `received_at` for a `device_id` (watermark; requires ingest token when configured).
 - `GET /sms` — list stored SMS records.
+- `GET /sms/transactions` — list the ledger, including manual rows. The phone does not call this.
+- `POST /sms/parse` — reclassify one stored raw SMS by `raw_sms_id` and replace that ledger row. The phone does not call this.
+- `POST /sms/transactions`, `PATCH /sms/transactions/{id}`, `DELETE /sms/transactions/{id}` — create, edit, or delete a ledger row. The phone does not call these. See the [main README](../README.md#sms-ledger).
 - `GET /logs` — list operational events.
 - `POST /logs/event` — companion backfill / ops events (requires ingest token when configured).
 - `GET /app/update.json` — return the companion update manifest. A path in `apk_url` is prefixed with `API_PUBLIC_BASE`.

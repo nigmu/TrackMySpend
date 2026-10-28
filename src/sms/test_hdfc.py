@@ -178,7 +178,7 @@ class TestHdfcSmsParser(unittest.TestCase):
         )
         self.assertIn("CREATE TABLE IF NOT EXISTS transactions_sms", schema)
         self.assertIn(
-            "raw_sms_id BIGINT NOT NULL UNIQUE\n            REFERENCES raw_sms_data (id) ON DELETE CASCADE",
+            "raw_sms_id BIGINT UNIQUE\n            REFERENCES raw_sms_data (id) ON DELETE CASCADE",
             schema,
         )
 
@@ -271,17 +271,21 @@ class TestHdfcSmsParser(unittest.TestCase):
         conn.reset_mock()
         ignored = classify_sms(by_id["card_otp"][1])
         apply_sms_classification(conn, 8, ignored)
-        self.assertEqual(conn.execute.call_count, 1)
-        sql, params = conn.execute.call_args.args
-        self.assertNotIn("INSERT", sql)
-        self.assertEqual(params, ("ignored", 8))
+        self.assertEqual(conn.execute.call_count, 2)
+        delete_sql, delete_params = conn.execute.call_args_list[0].args
+        self.assertIn("DELETE FROM transactions_sms", delete_sql)
+        self.assertEqual(delete_params, (8,))
+        status_sql, status_params = conn.execute.call_args_list[1].args
+        self.assertNotIn("INSERT", status_sql)
+        self.assertEqual(status_params, ("ignored", 8))
         self.assertNotIn("XXXXXX", repr(ignored))
 
         conn.reset_mock()
         info = classify_sms(by_id["balance_alert"][1])
         apply_sms_classification(conn, 9, info)
-        self.assertEqual(conn.execute.call_count, 1)
-        self.assertEqual(conn.execute.call_args.args[1], ("done", 9))
+        self.assertEqual(conn.execute.call_count, 2)
+        self.assertIn("DELETE FROM transactions_sms", conn.execute.call_args_list[0].args[0])
+        self.assertEqual(conn.execute.call_args_list[1].args[1], ("done", 9))
         self.assertIsNone(info.ledger)
 
         conn.reset_mock()

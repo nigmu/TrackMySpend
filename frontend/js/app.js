@@ -343,18 +343,6 @@ if (typeof document === "undefined") {
     }
   }
 
-  document.getElementById("btn-parse-sms").addEventListener("click", async () => {
-    try {
-      const r = await api.parseAllSms();
-      showToast(
-        `Parse all total=${r.total} done=${r.done} ignored=${r.ignored} unmatched=${r.unmatched}`
-      );
-      loadSms();
-    } catch (err) {
-      showToast(err.message, true);
-    }
-  });
-
   async function loadLogs() {
     const el = document.getElementById("logs-table");
     try {

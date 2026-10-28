@@ -5,9 +5,9 @@ deduplicated by content_hash(sender, body, device_id) — received_at is stored
 but not part of the hash (PDU vs inbox times can differ for the same SMS).
 A new SMS is classified in that same request: transactions_sms is written when
 the classification has a ledger, processing_status is set, then the request
-commits. A duplicate upload leaves both tables unchanged. POST /sms/parse_all
-reclassifies every raw row, deletes and rewrites that row's ledger, and
-returns total, done, ignored, unmatched. GET /sms/transactions lists the
+commits. A duplicate upload leaves both tables unchanged. POST /sms/parse
+reclassifies one stored raw SMS and updates that ledger row in place.
+GET /sms/transactions lists the
 ledger. Mail `transactions` is not used for SMS.
 Companion catch-up uses GET /sms/latest-received-at (per device_id) as a
 watermark after reinstall.

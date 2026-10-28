@@ -1,7 +1,7 @@
 """Classify one HDFC SMS body, and apply that result to a raw_sms_data row.
 
-Routes call parse_new_sms and reparse_all_sms. Ingest classifies a new row
-in the same request.
+Routes call parse_new_sms and parse_stored_sms. Ingest classifies a new row
+in the same request. POST /sms/parse classifies one stored raw SMS.
 """
 
 from __future__ import annotations
@@ -90,11 +90,13 @@ def apply_sms_classification(
     raw_sms_id: int,
     result: SmsClassification,
 ) -> None:
-    """Set processing_status and, when result.ledger is set, insert one transactions_sms row.
+    """Set processing_status and make transactions_sms match result.ledger.
 
-    sms_received_at on the ledger row is copied from raw_sms_data.received_at.
-    Does not commit. The insert runs before the status update, so a failed
-    insert leaves the raw row unchanged.
+    An existing SMS ledger row is updated in place (same id, same created_at).
+    sms_received_at is copied from raw_sms_data.received_at. No ledger means
+    any SMS ledger row for this raw SMS is deleted. Does not commit. The
+    ledger write runs before the status update, so a failed write leaves the
+    raw row unchanged.
     """
     ledger = result.ledger
     if ledger is not None:
@@ -109,6 +111,16 @@ def apply_sms_classification(
                 raw_sms_id, kind, amount_paisa, instrument, account_mask,
                 counterparty, reference, sms_received_at, template_name
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (raw_sms_id) DO UPDATE SET
+                kind = EXCLUDED.kind,
+                amount_paisa = EXCLUDED.amount_paisa,
+                instrument = EXCLUDED.instrument,
+                account_mask = EXCLUDED.account_mask,
+                counterparty = EXCLUDED.counterparty,
+                reference = EXCLUDED.reference,
+                sms_received_at = EXCLUDED.sms_received_at,
+                template_name = EXCLUDED.template_name,
+                updated_at = NOW()
             """,
             (
                 raw_sms_id,
@@ -121,6 +133,11 @@ def apply_sms_classification(
                 received_at,
                 ledger.template_name,
             ),
+        )
+    else:
+        conn.execute(
+            "DELETE FROM transactions_sms WHERE raw_sms_id = %s",
+            (raw_sms_id,),
         )
     conn.execute(
         """
@@ -138,18 +155,12 @@ def parse_new_sms(conn: Connection, raw_sms_id: int, body: str) -> SmsClassifica
     return result
 
 
-def reparse_all_sms(conn: Connection) -> dict:
-    # ponytail: one transaction, full table scan. Fine for a personal SMS
-    # archive (thousands of rows). Upgrade path: keyset batches if this lock gets long.
-    rows = conn.execute(
-        "SELECT id, body FROM raw_sms_data ORDER BY id"
-    ).fetchall()
-    counts = {"total": len(rows), "done": 0, "ignored": 0, "unmatched": 0}
-    for row in rows:
-        conn.execute(
-            "DELETE FROM transactions_sms WHERE raw_sms_id = %s",
-            (row["id"],),
-        )
-        result = parse_new_sms(conn, int(row["id"]), row["body"])
-        counts[result.processing_status] += 1
-    return counts
+def parse_stored_sms(conn: Connection, raw_sms_id: int) -> SmsClassification | None:
+    """Classify one stored raw SMS. None when that id is not in raw_sms_data."""
+    row = conn.execute(
+        "SELECT body FROM raw_sms_data WHERE id = %s",
+        (raw_sms_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    return parse_new_sms(conn, raw_sms_id, row["body"])

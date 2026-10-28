@@ -1,6 +1,6 @@
 # SMS decisions
 
-Companion 2.0.4 drops OTP texts on the phone. Messages that still arrive are classified by the templates below into `transactions_sms`. `POST /sms/ingest_and_parse` inserts a new row in `raw_sms_data`, classifies, writes `transactions_sms` when the classification has a ledger, sets `processing_status`, then commits. A duplicate upload leaves both tables unchanged. **Parse all** on the SMS page calls `POST /sms/parse_all`, reclassifies every raw row, deletes and rewrites that row's ledger, and returns `total`, `done`, `ignored`, `unmatched`. `GET /sms/transactions` lists the ledger. Gmail `GET /transactions` does not include SMS.
+Companion 2.0.4 drops OTP texts on the phone. Messages that still arrive are classified by the templates below into `transactions_sms`. `POST /sms/ingest_and_parse` inserts a new row in `raw_sms_data`, classifies, writes `transactions_sms` when the classification has a ledger, sets `processing_status`, then commits. A duplicate upload leaves both tables unchanged. `POST /sms/parse` reclassifies one stored raw SMS and updates that ledger row in place. `GET /sms/transactions` lists the ledger, including manual rows. Gmail `GET /transactions` does not include SMS.
 
 ## Where a message goes
 
@@ -39,13 +39,19 @@ PIN and password alerts are not filtered on the phone. This export has change no
 
 Mail `transactions` stays mail-only. Parsed SMS rows go to `transactions_sms`.
 
-`raw_sms_id` is `BIGINT NOT NULL UNIQUE REFERENCES raw_sms_data (id) ON DELETE CASCADE`. One ledger row per SMS. Deleting the raw row deletes the ledger row.
+`raw_sms_id` is `BIGINT UNIQUE REFERENCES raw_sms_data (id) ON DELETE CASCADE`, and null for a manual ledger row. One ledger row per raw SMS. Deleting the raw row deletes its ledger row. A manual row has no raw SMS to delete.
 
-Columns: `kind` (`debit`, `credit`, or `bill_reminder`), `amount_paisa`, `instrument`, `account_mask`, `counterparty`, `reference`, `sms_received_at`, `template_name`, plus `id` and `created_at`. `kind` keeps a reminder out of spend totals. `template_name` is the category id from `samples/hdfc_categories.json`. `sms_received_at` is copied from `raw_sms_data.received_at` when the ledger row is written. The parser does not read a date or a clock from the SMS body.
+Columns: `kind` (`debit`, `credit`, or `bill_reminder`), `amount_paisa`, `instrument`, `account_mask`, `counterparty`, `reference`, `sms_received_at`, `template_name`, plus `id`, `created_at`, and `updated_at`. `kind` keeps a reminder out of spend totals. `template_name` is the category id from `samples/hdfc_categories.json`, or `manual` for a typed row. For an SMS ledger row, `sms_received_at` is copied from `raw_sms_data.received_at`. The parser does not read a date or a clock from the SMS body. `updated_at` is set by the write statement, and matches `created_at` on insert.
 
-`amount_paisa` is null only for a reminder whose SMS has no amount (`credit_card_statement`). A debit or a credit always has an amount. The check constraint matches that.
+`amount_paisa` is null only for a reminder whose SMS has no amount (`credit_card_statement`). A debit or a credit always has an amount. The check constraint matches that. Manual rows use the same rule.
 
-`classify_sms` takes one raw body and returns the classification. `apply_sms_classification` writes it: `processing_status` becomes `done` when a ledger row is inserted or the message is info, `ignored` when an ignore rule matches, and `unmatched` when nothing matches. Neither function commits. `POST /sms/ingest_and_parse` calls them for a new row in the same request. `POST /sms/parse_all` deletes that row's ledger, then calls them again for every raw row.
+`POST /sms/transactions` inserts a manual ledger row and does not write `raw_sms_data`. `sms_received_at` is the time the client sends, or `created_at` when the client omits it. `template_name` stays `manual`.
+
+`PATCH /sms/transactions/{id}` may change `kind`, `amount_paisa`, `instrument`, `account_mask`, `counterparty`, `reference`, and `sms_received_at` on either kind of row. It sets `updated_at` to server time. It does not change `raw_sms_id`, `template_name`, or `created_at`.
+
+`DELETE /sms/transactions/{id}` removes the ledger row only. The raw SMS keeps its processing status. A later `POST /sms/parse` of that raw id can insert a new SMS ledger row. A deleted manual row is not recreated.
+
+`classify_sms` takes one raw body and returns the classification. `apply_sms_classification` writes it: `processing_status` becomes `done` when a ledger row is written or the message is info, `ignored` when an ignore rule matches, and `unmatched` when nothing matches. Neither function commits. `POST /sms/ingest_and_parse` calls them for a new row in the same request. `POST /sms/parse` calls them for one stored raw SMS. An existing SMS ledger row is updated in place (same `id` and `created_at`). Parser fields replace any hand edits, and `sms_received_at` is copied from the phone again. No ledger deletes that raw SMS's ledger row. There is no route that reclassifies every raw SMS.
 
 JSON kind `reminder` is stored as `bill_reminder`. JSON kinds `ignore` and `info` write no ledger row. Categories with `count: 0` get no template until a real sample exists.
 

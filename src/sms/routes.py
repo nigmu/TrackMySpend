@@ -1,15 +1,16 @@
 from datetime import datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from psycopg import Connection
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from ..core.config import SMS_INGEST_TOKEN
 from ..core.logging import get_logger
 from ..db.connection import get_db
 from ..logs.db import insert_event_log
 from . import db
-from .classify import parse_new_sms, reparse_all_sms
+from .classify import parse_new_sms, parse_stored_sms
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["SMS"])
@@ -124,23 +125,56 @@ def ingest_and_parse_sms(
     }
 
 
-@router.post("/sms/parse_all")
-def parse_all_sms(conn: Connection = Depends(get_db)):
-    counts = reparse_all_sms(conn)
-    message = (
-        f"SMS parse all total={counts['total']} done={counts['done']}"
-        f" ignored={counts['ignored']} unmatched={counts['unmatched']}"
-    )
-    severity = "warning" if counts["unmatched"] else "info"
-    getattr(logger, severity)(message)
-    insert_event_log(
-        "sms.parse_all",
-        "sms",
-        message,
-        severity=severity,
-        context=counts,
-    )
-    return counts
+class ParseSmsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    raw_sms_id: int
+
+
+class ManualLedgerWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["debit", "credit", "bill_reminder"] | None = None
+    amount_paisa: int | None = None
+    instrument: str | None = None
+    account_mask: str | None = None
+    counterparty: str | None = None
+    reference: str | None = None
+    sms_received_at: datetime | None = None
+
+
+def _blank(value: str | None) -> str | None:
+    if value is None:
+        return None
+    value = value.strip()
+    return value or None
+
+
+def _require_amount(kind: str, amount: int | None) -> None:
+    if kind != "bill_reminder" and amount is None:
+        raise HTTPException(status_code=400, detail="amount_paisa is required")
+
+
+def _write_fields(payload: ManualLedgerWrite) -> dict:
+    data = payload.model_dump(exclude_unset=True)
+    if "kind" in data and data["kind"] is None:
+        raise HTTPException(status_code=400, detail="kind is required")
+    if "sms_received_at" in data and data["sms_received_at"] is None:
+        raise HTTPException(status_code=400, detail="sms_received_at is required")
+    for key in ("instrument", "account_mask", "counterparty", "reference"):
+        if key in data:
+            data[key] = _blank(data[key])
+    return data
+
+
+@router.post("/sms/parse")
+def parse_one_sms(payload: ParseSmsRequest, conn: Connection = Depends(get_db)):
+    result = parse_stored_sms(conn, payload.raw_sms_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="raw sms not found")
+    return {
+        "raw_sms_id": payload.raw_sms_id,
+        "processing_status": result.processing_status,
+        "transaction": db.get_sms_transaction_by_raw(conn, payload.raw_sms_id),
+    }
 
 
 @router.get("/sms/latest-received-at")
@@ -171,3 +205,49 @@ def get_sms_transactions(
 ):
     items = db.list_sms_transactions(conn, limit=limit, offset=offset)
     return {"count": len(items), "total": db.count_sms_transactions(conn), "transactions": items}
+
+
+@router.post("/sms/transactions")
+def create_manual_transaction(payload: ManualLedgerWrite, conn: Connection = Depends(get_db)):
+    if payload.kind is None:
+        raise HTTPException(status_code=400, detail="kind is required")
+    fields = _write_fields(payload)
+    _require_amount(payload.kind, fields.get("amount_paisa"))
+    return db.insert_manual_ledger(
+        conn,
+        kind=payload.kind,
+        amount_paisa=fields.get("amount_paisa"),
+        instrument=fields.get("instrument"),
+        account_mask=fields.get("account_mask"),
+        counterparty=fields.get("counterparty"),
+        reference=fields.get("reference"),
+        sms_received_at=fields.get("sms_received_at"),
+    )
+
+
+@router.patch("/sms/transactions/{txn_id}")
+def update_transaction(
+    txn_id: int,
+    payload: ManualLedgerWrite,
+    conn: Connection = Depends(get_db),
+):
+    fields = _write_fields(payload)
+    if not fields:
+        raise HTTPException(status_code=400, detail="no fields to update")
+    existing = db.get_sms_transaction(conn, txn_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="transaction not found")
+    kind = fields.get("kind", existing["kind"])
+    amount = fields["amount_paisa"] if "amount_paisa" in fields else existing["amount_paisa"]
+    _require_amount(kind, amount)
+    updated = db.update_sms_transaction(conn, txn_id, fields)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="transaction not found")
+    return updated
+
+
+@router.delete("/sms/transactions/{txn_id}")
+def delete_transaction(txn_id: int, conn: Connection = Depends(get_db)):
+    if not db.delete_sms_transaction(conn, txn_id):
+        raise HTTPException(status_code=404, detail="transaction not found")
+    return {"status": "deleted", "id": txn_id}

@@ -4,9 +4,9 @@ Two independent pipelines, easy to tell apart by table prefix:
   - Mail:  email_accounts, sender_filters, raw_mail_data, transactions, sync_runs
            (raw_mail_data -> transactions is a one-to-one, populated by src/mail/parse.py)
   - SMS:   raw_sms_data, transactions_sms
-           (raw_sms_data -> transactions_sms is one-to-one via raw_sms_id,
-           written by src/sms/classify.py from POST /sms/ingest_and_parse
-           when the classification has a ledger, and rewritten by POST /sms/parse_all)
+           (an SMS ledger row points at one raw_sms_data row via raw_sms_id.
+           A manual ledger row leaves raw_sms_id null. Written by classify.py
+           on POST /sms/ingest_and_parse, and updated in place by POST /sms/parse.)
   - Shared: app_event_logs (used by both pipelines + TMS Companion OTA)
 """
 
@@ -115,15 +115,16 @@ SCHEMA_STATEMENTS: list[str] = [
         ON app_event_logs (created_at DESC, id DESC)
     """,
     """
-    -- One SMS, one ledger row. raw_sms_id references raw_sms_data.id.
-    -- sms_received_at is copied from raw_sms_data.received_at when the row is
-    -- written. The SMS body is not parsed for a date. amount_paisa is null
-    -- only for a bill reminder whose text has no amount.
+    -- SMS ledger rows reference raw_sms_data. Manual ledger rows leave
+    -- raw_sms_id null (many nulls are allowed under UNIQUE).
+    -- sms_received_at is copied from raw_sms_data.received_at when the parser
+    -- writes the row. The SMS body is not parsed for a date. amount_paisa is
+    -- null only for a bill reminder whose text has no amount.
     -- Inserted by POST /sms/ingest_and_parse when a new row's classification
-    -- has a ledger. POST /sms/parse_all deletes and rewrites that ledger row.
+    -- has a ledger. POST /sms/parse updates that ledger row in place.
     CREATE TABLE IF NOT EXISTS transactions_sms (
         id BIGSERIAL PRIMARY KEY,
-        raw_sms_id BIGINT NOT NULL UNIQUE
+        raw_sms_id BIGINT UNIQUE
             REFERENCES raw_sms_data (id) ON DELETE CASCADE,
         kind TEXT NOT NULL CHECK (kind IN ('debit', 'credit', 'bill_reminder')),
         amount_paisa BIGINT,
@@ -134,6 +135,7 @@ SCHEMA_STATEMENTS: list[str] = [
         sms_received_at TIMESTAMPTZ,
         template_name TEXT NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         CONSTRAINT transactions_sms_amount_present CHECK (
             amount_paisa IS NOT NULL OR kind = 'bill_reminder'
         )
@@ -161,6 +163,27 @@ SCHEMA_STATEMENTS: list[str] = [
             ALTER TABLE transactions_sms ADD COLUMN sms_received_at TIMESTAMPTZ;
         END IF;
     END $$
+    """,
+    """
+    ALTER TABLE transactions_sms
+        ALTER COLUMN raw_sms_id DROP NOT NULL
+    """,
+    """
+    ALTER TABLE transactions_sms
+        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ
+    """,
+    """
+    UPDATE transactions_sms
+    SET updated_at = created_at
+    WHERE updated_at IS NULL
+    """,
+    """
+    ALTER TABLE transactions_sms
+        ALTER COLUMN updated_at SET DEFAULT NOW()
+    """,
+    """
+    ALTER TABLE transactions_sms
+        ALTER COLUMN updated_at SET NOT NULL
     """,
 ]
 
