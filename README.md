@@ -84,11 +84,13 @@ These filters apply only to Gmail. TMS Companion keeps its SMS filters on the ph
 
 `transactions_sms` holds SMS ledger rows and manual ledger rows. An SMS ledger row comes from one raw SMS. A manual ledger row is typed in: `raw_sms_id` is null and `template_name` is `manual`. The list includes both. A manual row has no `sender` or `device_id`. These routes do not use `SMS_INGEST_TOKEN`.
 
-`kind` is `debit`, `credit`, or `bill_reminder`. `amount_paisa` is required except on a bill reminder. Blank `instrument`, `account_mask`, `counterparty`, and `reference` are stored as null.
+`kind` is `debit`, `credit`, `bill_reminder`, or `balance`. `amount_paisa` is required except on a bill reminder. A balance is the available amount in an account, not money received or spent. Blank `instrument`, `account_mask`, `counterparty`, and `reference` are stored as null.
+
+A `balance_alert` raw SMS is stored as kind `balance`: the available amount, the account mask as the SMS writes it, and instrument `account`. The date in the message stays on the raw SMS. Other info messages, and ignore messages, do not write a ledger row. A raw SMS already stored is unchanged until `POST /sms/parse` runs for that id.
 
 `created_at` and `updated_at` are server time. The client does not send them. On insert they match. A later update moves only `updated_at`.
 
-`POST /sms/transactions` creates a manual row. Send `kind` and, except for a bill reminder, `amount_paisa`. `instrument`, `account_mask`, `counterparty`, `reference`, and `sms_received_at` are optional. Omit `sms_received_at` and it matches `created_at`. The response is the saved row.
+`POST /sms/transactions` creates a manual row. Send `kind` (`debit`, `credit`, `bill_reminder`, or `balance`) and, except for a bill reminder, `amount_paisa`. `instrument`, `account_mask`, `counterparty`, `reference`, and `sms_received_at` are optional. Omit `sms_received_at` and it matches `created_at`. The response is the saved row.
 
 `PATCH /sms/transactions/{id}` changes those same fields on either row type. Omitted fields stay. Null clears an optional text field. `kind` and `sms_received_at` cannot be null. `raw_sms_id`, `template_name`, and `created_at` cannot be changed, and any other field is rejected. An empty body is 400. A missing id is 404. The response is the saved row.
 

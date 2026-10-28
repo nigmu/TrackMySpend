@@ -48,7 +48,10 @@ class TestRows(unittest.TestCase):
         self.assertEqual(fields["reference"], "665001558754")
         label, fields = regex_row(_BALANCE)
         self.assertEqual(label, "balance_alert")
-        self.assertEqual(fields, {name: "" for name in FIELDS})
+        self.assertEqual(fields["amount_paisa"], "76390")
+        self.assertEqual(fields["account_mask"], "XX3826")
+        self.assertEqual(fields["counterparty"], "")
+        self.assertEqual(fields["reference"], "")
         absent = noul_question("amount_paisa", "")
         self.assertNotIn("stored_rupees", json.dumps(absent))
 

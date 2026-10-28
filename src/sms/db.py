@@ -6,6 +6,7 @@ from datetime import datetime
 from psycopg import Connection
 
 from ..core.logging import get_logger
+from .ledger import LEDGER_FROM
 
 logger = get_logger(__name__)
 
@@ -118,100 +119,23 @@ def count_sms(conn: Connection) -> int:
     return int(row["n"]) if row else 0
 
 
-_LEDGER_FROM = """
-SELECT t.id, t.raw_sms_id, t.kind, t.amount_paisa, t.instrument,
-       t.account_mask, t.counterparty, t.reference, t.sms_received_at,
-       t.template_name, t.created_at, t.updated_at, r.sender, r.device_id
-FROM transactions_sms t
-LEFT JOIN raw_sms_data r ON r.id = t.raw_sms_id
-"""
-
-_PATCH_COLUMNS = (
-    "kind",
-    "amount_paisa",
-    "instrument",
-    "account_mask",
-    "counterparty",
-    "reference",
-    "sms_received_at",
-)
+def set_processing_status(conn: Connection, raw_sms_id: int, processing_status: str) -> None:
+    conn.execute(
+        """
+        UPDATE raw_sms_data
+        SET processing_status = %s, updated_at = NOW()
+        WHERE id = %s
+        """,
+        (processing_status, raw_sms_id),
+    )
 
 
 def list_sms_transactions(conn: Connection, limit: int = 50, offset: int = 0) -> list[dict]:
     return conn.execute(
-        _LEDGER_FROM
+        LEDGER_FROM
         + " ORDER BY t.sms_received_at DESC NULLS LAST, t.id DESC LIMIT %s OFFSET %s",
         (limit, offset),
     ).fetchall()
-
-
-def get_sms_transaction(conn: Connection, txn_id: int) -> dict | None:
-    return conn.execute(_LEDGER_FROM + " WHERE t.id = %s", (txn_id,)).fetchone()
-
-
-def get_sms_transaction_by_raw(conn: Connection, raw_sms_id: int) -> dict | None:
-    return conn.execute(
-        _LEDGER_FROM + " WHERE t.raw_sms_id = %s",
-        (raw_sms_id,),
-    ).fetchone()
-
-
-def insert_manual_ledger(
-    conn: Connection,
-    *,
-    kind: str,
-    amount_paisa: int | None,
-    instrument: str | None,
-    account_mask: str | None,
-    counterparty: str | None,
-    reference: str | None,
-    sms_received_at: datetime | None,
-) -> dict:
-    row = conn.execute(
-        """
-        INSERT INTO transactions_sms (
-            kind, amount_paisa, instrument, account_mask, counterparty, reference,
-            sms_received_at, template_name, created_at, updated_at
-        ) VALUES (%s, %s, %s, %s, %s, %s, COALESCE(%s, NOW()), 'manual', NOW(), NOW())
-        RETURNING id
-        """,
-        (
-            kind,
-            amount_paisa,
-            instrument,
-            account_mask,
-            counterparty,
-            reference,
-            sms_received_at,
-        ),
-    ).fetchone()
-    return get_sms_transaction(conn, int(row["id"]))
-
-
-def update_sms_transaction(conn: Connection, txn_id: int, fields: dict) -> dict | None:
-    sets = []
-    params: list = []
-    for column in _PATCH_COLUMNS:
-        if column in fields:
-            sets.append(f"{column} = %s")
-            params.append(fields[column])
-    sets.append("updated_at = NOW()")
-    params.append(txn_id)
-    result = conn.execute(
-        f"UPDATE transactions_sms SET {', '.join(sets)} WHERE id = %s",
-        params,
-    )
-    if result.rowcount == 0:
-        return None
-    return get_sms_transaction(conn, txn_id)
-
-
-def delete_sms_transaction(conn: Connection, txn_id: int) -> bool:
-    result = conn.execute(
-        "DELETE FROM transactions_sms WHERE id = %s",
-        (txn_id,),
-    )
-    return result.rowcount > 0
 
 
 def count_sms_transactions(conn: Connection) -> int:

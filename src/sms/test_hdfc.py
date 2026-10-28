@@ -17,7 +17,8 @@ from unittest.mock import MagicMock
 from src.core.config import IST
 
 from src.sms.amount import parse_amount_paisa
-from src.sms.classify import apply_sms_classification, classify_sms
+from src.sms.classify import classify_sms
+from src.sms.ledger import apply
 from src.sms.templates import TEMPLATES
 
 # category id, JSON kind, redacted body
@@ -42,9 +43,9 @@ SAMPLES = (
     ("upi_credit", "credit", "Credit Alert!\nRs.25.00 credited to HDFC Bank A/c XX3826 on 10-10-26 from VPA 7044653836@nyes (UPI 005726968001)"),
     ("upi_credit", "credit", "Credit Alert!\nRs.51.36 credited to HDFC Bank A/c XX3826 on 20-09-26 from VPA ritamrajnayak@okicici (UPI 626385871341)"),
     ("upi_credit", "credit", "Credit Alert!\nRs.1.00 credited to HDFC Bank A/c XX3826 on 06-09-26 from VPA 6370227050@yescred (UPI 661500244647)"),
-    ("balance_alert", "info", "Available Bal in HDFC Bank A/c XX3826 as on yesterday:09-OCT-26 is INR 1,040.90. Cheques are subject to clearing.For updated A/C Bal dial 18002703333."),
-    ("balance_alert", "info", "Available Bal in HDFC Bank A/c XX3826 as on yesterday:21-SEP-26 is INR 172.35. Cheques are subject to clearing.For updated A/C Bal dial 18002703333."),
-    ("balance_alert", "info", "Available Bal in HDFC Bank A/c XX3826 as on yesterday:04-SEP-26 is INR 2,617.28. Cheques are subject to clearing.For updated A/C Bal dial 18002703333."),
+    ("balance_alert", "balance", "Available Bal in HDFC Bank A/c XX3826 as on yesterday:09-OCT-26 is INR 1,040.90. Cheques are subject to clearing.For updated A/C Bal dial 18002703333."),
+    ("balance_alert", "balance", "Available Bal in HDFC Bank A/c XX3826 as on yesterday:21-SEP-26 is INR 172.35. Cheques are subject to clearing.For updated A/C Bal dial 18002703333."),
+    ("balance_alert", "balance", "Available Bal in HDFC Bank A/c XX3826 as on yesterday:04-SEP-26 is INR 2,617.28. Cheques are subject to clearing.For updated A/C Bal dial 18002703333."),
     ("credit_card_spend", "debit", "Spent Rs.255.5 On HDFC Bank Card 6517 At UBER INDIA SYSTEMS PRI On 2026-10-07:20:54:25.Not You? To Block+Reissue Call 18002586161/SMS BLOCK CC 6517 to 7308080808"),
     ("credit_card_spend", "debit", "Spent Rs.61.71 On HDFC Bank Card 6517 At UBER INDIA SYSTEMS PRI On 2026-10-09:21:51:52.Not You? To Block+Reissue Call 18002586161/SMS BLOCK CC 6517 to 7308080808"),
     ("credit_card_spend", "debit", "Spent Rs.58.34 On HDFC Bank Card 6517 At UBER INDIA SYSTEMS PRI On 2026-09-06:20:49:18.Not You? To Block+Reissue Call 18002586161/SMS BLOCK CC 6517 to 7308080808"),
@@ -110,7 +111,12 @@ _TEMPLATE_ORDER = (
     "credit_card_statement",
 )
 
-_LEDGER_KIND = {"debit": "debit", "credit": "credit", "reminder": "bill_reminder"}
+_LEDGER_KIND = {
+    "debit": "debit",
+    "credit": "credit",
+    "reminder": "bill_reminder",
+    "balance": "balance",
+}
 
 _NO_COUNTERPARTY = {
     "credit_card_payment_received",
@@ -118,6 +124,7 @@ _NO_COUNTERPARTY = {
     "credit_card_payment_credited",
     "rd_installment_due",
     "credit_card_statement",
+    "balance_alert",
 }
 
 _HAS_REFERENCE = {
@@ -245,56 +252,53 @@ class TestHdfcSmsParser(unittest.TestCase):
             if inr_dot:
                 self.assertEqual(ledger.amount_paisa, parse_amount_paisa(inr_dot.group(1)))
 
-    def test_apply_inserts_ledger_or_only_status(self):
+    def test_apply_upserts_or_deletes_the_sms_ledger_row(self):
         by_id = {}
         for category_id, json_kind, body in SAMPLES:
             by_id.setdefault(category_id, (json_kind, body))
 
         when = datetime(2026, 10, 11, 8, 30, tzinfo=IST)
         conn = MagicMock()
-        conn.execute.return_value.fetchone.return_value = {"received_at": when}
         debit = classify_sms(by_id["upi_debit"][1])
-        apply_sms_classification(conn, 7, debit)
-        select_sql = conn.execute.call_args_list[0].args[0]
-        self.assertIn("SELECT received_at FROM raw_sms_data", select_sql)
-        insert_sql, insert_params = conn.execute.call_args_list[1].args
-        self.assertIn("INSERT INTO transactions_sms", insert_sql)
-        self.assertIn("sms_received_at", insert_sql)
+        apply(conn, 7, debit.ledger, when)
+        insert_sql, insert_params = conn.execute.call_args_list[0].args
+        self.assertIn("ON CONFLICT (raw_sms_id) DO UPDATE", insert_sql)
+        self.assertIn("updated_at = NOW()", insert_sql)
+        self.assertNotIn("created_at", insert_sql.split("DO UPDATE", 1)[1])
+        self.assertNotIn("raw_sms_data", insert_sql)
         self.assertEqual(insert_params[0], 7)
         self.assertEqual(insert_params[1], "debit")
         self.assertEqual(insert_params[2], debit.ledger.amount_paisa)
         self.assertEqual(insert_params[7], when)
-        update_sql, update_params = conn.execute.call_args_list[2].args
-        self.assertIn("UPDATE raw_sms_data", update_sql)
-        self.assertEqual(update_params, ("done", 7))
 
         conn.reset_mock()
         ignored = classify_sms(by_id["card_otp"][1])
-        apply_sms_classification(conn, 8, ignored)
-        self.assertEqual(conn.execute.call_count, 2)
+        apply(conn, 8, ignored.ledger, when)
+        self.assertEqual(conn.execute.call_count, 1)
         delete_sql, delete_params = conn.execute.call_args_list[0].args
-        self.assertIn("DELETE FROM transactions_sms", delete_sql)
+        self.assertIn("DELETE FROM transactions_sms WHERE raw_sms_id", delete_sql)
         self.assertEqual(delete_params, (8,))
-        status_sql, status_params = conn.execute.call_args_list[1].args
-        self.assertNotIn("INSERT", status_sql)
-        self.assertEqual(status_params, ("ignored", 8))
         self.assertNotIn("XXXXXX", repr(ignored))
 
         conn.reset_mock()
-        info = classify_sms(by_id["balance_alert"][1])
-        apply_sms_classification(conn, 9, info)
-        self.assertEqual(conn.execute.call_count, 2)
-        self.assertIn("DELETE FROM transactions_sms", conn.execute.call_args_list[0].args[0])
-        self.assertEqual(conn.execute.call_args_list[1].args[1], ("done", 9))
-        self.assertIsNone(info.ledger)
+        balance = classify_sms(by_id["balance_alert"][1])
+        apply(conn, 9, balance.ledger, when)
+        _sql, params = conn.execute.call_args_list[0].args
+        self.assertEqual(params[1], "balance")
+        self.assertEqual(params[2], 104090)
+        self.assertEqual(params[3], "account")
+        self.assertEqual(params[4], "XX3826")
+        self.assertIsNone(params[5])
+        self.assertIsNone(params[6])
+        self.assertEqual(params[7], when)
+        self.assertEqual(params[8], "balance_alert")
 
         conn.reset_mock()
         reminder = classify_sms(by_id["credit_card_statement"][1])
-        apply_sms_classification(conn, 10, reminder)
-        _sql, params = conn.execute.call_args_list[1].args
+        apply(conn, 10, reminder.ledger, when)
+        _sql, params = conn.execute.call_args_list[0].args
         self.assertEqual(params[1], "bill_reminder")
         self.assertIsNone(params[2])
-        self.assertEqual(conn.execute.call_args_list[2].args[1], ("done", 10))
 
     def test_csv_counts_match_categories_when_export_is_present(self):
         if not _CSV.is_file():

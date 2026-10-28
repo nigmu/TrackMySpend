@@ -5,8 +5,9 @@ Two independent pipelines, easy to tell apart by table prefix:
            (raw_mail_data -> transactions is a one-to-one, populated by src/mail/parse.py)
   - SMS:   raw_sms_data, transactions_sms
            (an SMS ledger row points at one raw_sms_data row via raw_sms_id.
-           A manual ledger row leaves raw_sms_id null. Written by classify.py
-           on POST /sms/ingest_and_parse, and updated in place by POST /sms/parse.)
+           A manual ledger row leaves raw_sms_id null. The ledger module writes
+           the row. POST /sms/ingest_and_parse and POST /sms/parse classify,
+           then set processing_status on the raw SMS.)
   - Shared: app_event_logs (used by both pipelines + TMS Companion OTA)
 """
 
@@ -117,16 +118,16 @@ SCHEMA_STATEMENTS: list[str] = [
     """
     -- SMS ledger rows reference raw_sms_data. Manual ledger rows leave
     -- raw_sms_id null (many nulls are allowed under UNIQUE).
-    -- sms_received_at is copied from raw_sms_data.received_at when the parser
+    -- sms_received_at is copied from raw_sms_data.received_at when apply
     -- writes the row. The SMS body is not parsed for a date. amount_paisa is
-    -- null only for a bill reminder whose text has no amount.
+    -- null only for a bill reminder. A balance stores the available amount.
     -- Inserted by POST /sms/ingest_and_parse when a new row's classification
     -- has a ledger. POST /sms/parse updates that ledger row in place.
     CREATE TABLE IF NOT EXISTS transactions_sms (
         id BIGSERIAL PRIMARY KEY,
         raw_sms_id BIGINT UNIQUE
             REFERENCES raw_sms_data (id) ON DELETE CASCADE,
-        kind TEXT NOT NULL CHECK (kind IN ('debit', 'credit', 'bill_reminder')),
+        kind TEXT NOT NULL CHECK (kind IN ('debit', 'credit', 'bill_reminder', 'balance')),
         amount_paisa BIGINT,
         instrument TEXT,
         account_mask TEXT,
@@ -184,6 +185,14 @@ SCHEMA_STATEMENTS: list[str] = [
     """
     ALTER TABLE transactions_sms
         ALTER COLUMN updated_at SET NOT NULL
+    """,
+    """
+    ALTER TABLE transactions_sms DROP CONSTRAINT IF EXISTS transactions_sms_kind_check
+    """,
+    """
+    ALTER TABLE transactions_sms
+        ADD CONSTRAINT transactions_sms_kind_check
+        CHECK (kind IN ('debit', 'credit', 'bill_reminder', 'balance'))
     """,
 ]
 

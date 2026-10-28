@@ -11,6 +11,8 @@ from ..db.connection import get_db
 from ..logs.db import insert_event_log
 from . import db
 from .classify import parse_new_sms, parse_stored_sms
+from . import ledger
+from .ledger import LedgerRuleError
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["SMS"])
@@ -132,37 +134,13 @@ class ParseSmsRequest(BaseModel):
 
 class ManualLedgerWrite(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    kind: Literal["debit", "credit", "bill_reminder"] | None = None
+    kind: Literal["debit", "credit", "bill_reminder", "balance"] | None = None
     amount_paisa: int | None = None
     instrument: str | None = None
     account_mask: str | None = None
     counterparty: str | None = None
     reference: str | None = None
     sms_received_at: datetime | None = None
-
-
-def _blank(value: str | None) -> str | None:
-    if value is None:
-        return None
-    value = value.strip()
-    return value or None
-
-
-def _require_amount(kind: str, amount: int | None) -> None:
-    if kind != "bill_reminder" and amount is None:
-        raise HTTPException(status_code=400, detail="amount_paisa is required")
-
-
-def _write_fields(payload: ManualLedgerWrite) -> dict:
-    data = payload.model_dump(exclude_unset=True)
-    if "kind" in data and data["kind"] is None:
-        raise HTTPException(status_code=400, detail="kind is required")
-    if "sms_received_at" in data and data["sms_received_at"] is None:
-        raise HTTPException(status_code=400, detail="sms_received_at is required")
-    for key in ("instrument", "account_mask", "counterparty", "reference"):
-        if key in data:
-            data[key] = _blank(data[key])
-    return data
 
 
 @router.post("/sms/parse")
@@ -173,7 +151,7 @@ def parse_one_sms(payload: ParseSmsRequest, conn: Connection = Depends(get_db)):
     return {
         "raw_sms_id": payload.raw_sms_id,
         "processing_status": result.processing_status,
-        "transaction": db.get_sms_transaction_by_raw(conn, payload.raw_sms_id),
+        "transaction": ledger.get_by_raw(conn, payload.raw_sms_id),
     }
 
 
@@ -209,20 +187,10 @@ def get_sms_transactions(
 
 @router.post("/sms/transactions")
 def create_manual_transaction(payload: ManualLedgerWrite, conn: Connection = Depends(get_db)):
-    if payload.kind is None:
-        raise HTTPException(status_code=400, detail="kind is required")
-    fields = _write_fields(payload)
-    _require_amount(payload.kind, fields.get("amount_paisa"))
-    return db.insert_manual_ledger(
-        conn,
-        kind=payload.kind,
-        amount_paisa=fields.get("amount_paisa"),
-        instrument=fields.get("instrument"),
-        account_mask=fields.get("account_mask"),
-        counterparty=fields.get("counterparty"),
-        reference=fields.get("reference"),
-        sms_received_at=fields.get("sms_received_at"),
-    )
+    try:
+        return ledger.create_manual(conn, payload.model_dump(exclude_unset=True))
+    except LedgerRuleError as err:
+        raise HTTPException(status_code=400, detail=err.detail) from err
 
 
 @router.patch("/sms/transactions/{txn_id}")
@@ -231,16 +199,13 @@ def update_transaction(
     payload: ManualLedgerWrite,
     conn: Connection = Depends(get_db),
 ):
-    fields = _write_fields(payload)
+    fields = payload.model_dump(exclude_unset=True)
     if not fields:
         raise HTTPException(status_code=400, detail="no fields to update")
-    existing = db.get_sms_transaction(conn, txn_id)
-    if existing is None:
-        raise HTTPException(status_code=404, detail="transaction not found")
-    kind = fields.get("kind", existing["kind"])
-    amount = fields["amount_paisa"] if "amount_paisa" in fields else existing["amount_paisa"]
-    _require_amount(kind, amount)
-    updated = db.update_sms_transaction(conn, txn_id, fields)
+    try:
+        updated = ledger.update(conn, txn_id, fields)
+    except LedgerRuleError as err:
+        raise HTTPException(status_code=400, detail=err.detail) from err
     if updated is None:
         raise HTTPException(status_code=404, detail="transaction not found")
     return updated
@@ -248,6 +213,6 @@ def update_transaction(
 
 @router.delete("/sms/transactions/{txn_id}")
 def delete_transaction(txn_id: int, conn: Connection = Depends(get_db)):
-    if not db.delete_sms_transaction(conn, txn_id):
+    if not ledger.delete(conn, txn_id):
         raise HTTPException(status_code=404, detail="transaction not found")
     return {"status": "deleted", "id": txn_id}

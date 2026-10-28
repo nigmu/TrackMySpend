@@ -1,7 +1,8 @@
-"""Classify one HDFC SMS body, and apply that result to a raw_sms_data row.
+"""Classify one HDFC SMS body, then hand the ledger row to the ledger module.
 
 Routes call parse_new_sms and parse_stored_sms. Ingest classifies a new row
 in the same request. POST /sms/parse classifies one stored raw SMS.
+classify_sms does not touch the database.
 """
 
 from __future__ import annotations
@@ -11,6 +12,8 @@ from dataclasses import dataclass
 from psycopg import Connection
 
 from .amount import parse_amount_paisa
+from . import db
+from .ledger import apply
 from .templates import TEMPLATES, Template
 
 
@@ -85,82 +88,34 @@ def classify_sms(body: str) -> SmsClassification:
     return SmsClassification(None, "unmatched", None, "no_template")
 
 
-def apply_sms_classification(
+def _write_classification(
     conn: Connection,
     raw_sms_id: int,
-    result: SmsClassification,
-) -> None:
-    """Set processing_status and make transactions_sms match result.ledger.
-
-    An existing SMS ledger row is updated in place (same id, same created_at).
-    sms_received_at is copied from raw_sms_data.received_at. No ledger means
-    any SMS ledger row for this raw SMS is deleted. Does not commit. The
-    ledger write runs before the status update, so a failed write leaves the
-    raw row unchanged.
-    """
-    ledger = result.ledger
-    if ledger is not None:
-        raw = conn.execute(
-            "SELECT received_at FROM raw_sms_data WHERE id = %s",
-            (raw_sms_id,),
-        ).fetchone()
-        received_at = None if raw is None else raw["received_at"]
-        conn.execute(
-            """
-            INSERT INTO transactions_sms (
-                raw_sms_id, kind, amount_paisa, instrument, account_mask,
-                counterparty, reference, sms_received_at, template_name
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (raw_sms_id) DO UPDATE SET
-                kind = EXCLUDED.kind,
-                amount_paisa = EXCLUDED.amount_paisa,
-                instrument = EXCLUDED.instrument,
-                account_mask = EXCLUDED.account_mask,
-                counterparty = EXCLUDED.counterparty,
-                reference = EXCLUDED.reference,
-                sms_received_at = EXCLUDED.sms_received_at,
-                template_name = EXCLUDED.template_name,
-                updated_at = NOW()
-            """,
-            (
-                raw_sms_id,
-                ledger.kind,
-                ledger.amount_paisa,
-                ledger.instrument,
-                ledger.account_mask,
-                ledger.counterparty,
-                ledger.reference,
-                received_at,
-                ledger.template_name,
-            ),
-        )
-    else:
-        conn.execute(
-            "DELETE FROM transactions_sms WHERE raw_sms_id = %s",
-            (raw_sms_id,),
-        )
-    conn.execute(
-        """
-        UPDATE raw_sms_data
-        SET processing_status = %s, updated_at = NOW()
-        WHERE id = %s
-        """,
-        (result.processing_status, raw_sms_id),
-    )
+    body: str,
+    sms_received_at,
+) -> SmsClassification:
+    result = classify_sms(body)
+    apply(conn, raw_sms_id, result.ledger, sms_received_at)
+    db.set_processing_status(conn, raw_sms_id, result.processing_status)
+    return result
 
 
 def parse_new_sms(conn: Connection, raw_sms_id: int, body: str) -> SmsClassification:
-    result = classify_sms(body)
-    apply_sms_classification(conn, raw_sms_id, result)
-    return result
+    """Classify a raw SMS that was just stored. received_at is copied from that row."""
+    raw = conn.execute(
+        "SELECT received_at FROM raw_sms_data WHERE id = %s",
+        (raw_sms_id,),
+    ).fetchone()
+    received_at = None if raw is None else raw["received_at"]
+    return _write_classification(conn, raw_sms_id, body, received_at)
 
 
 def parse_stored_sms(conn: Connection, raw_sms_id: int) -> SmsClassification | None:
     """Classify one stored raw SMS. None when that id is not in raw_sms_data."""
     row = conn.execute(
-        "SELECT body FROM raw_sms_data WHERE id = %s",
+        "SELECT body, received_at FROM raw_sms_data WHERE id = %s",
         (raw_sms_id,),
     ).fetchone()
     if row is None:
         return None
-    return parse_new_sms(conn, raw_sms_id, row["body"])
+    return _write_classification(conn, raw_sms_id, row["body"], row["received_at"])

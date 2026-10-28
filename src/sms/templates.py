@@ -14,7 +14,7 @@ _CODE = r"(?:XXXXXX|\d{6})"
 @dataclass(frozen=True)
 class Template:
     name: str
-    kind: str  # ignore | info | debit | credit | bill_reminder
+    kind: str  # ignore | info | debit | credit | bill_reminder | balance
     pattern: re.Pattern[str]
     instrument: str | None = None
     amount_optional: bool = False
@@ -64,7 +64,13 @@ TEMPLATES: tuple[Template, ...] = (
         "ignore",
         r"\AYour transaction on HDFC Bank card .+ is declined",
     ),
-    _t("balance_alert", "info", r"\AAvailable Bal in HDFC Bank A/c "),
+    _t(
+        "balance_alert",
+        "balance",
+        r"\AAvailable Bal in HDFC Bank A/c (?P<mask>\S+) as on yesterday:\S+ is "
+        r"(?P<amount>INR [\d,]+(?:\.\d+)?)",
+        "account",
+    ),
     _t("login_alert", "info", r"\ALogin Alert!"),
     _t(
         "netbanking_password_reset",

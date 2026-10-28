@@ -94,9 +94,10 @@ def noul_question(field: str, value: str) -> dict:
             "instructions": {
                 "stored_rupees": paisa_as_rupees(int(value)),
                 "question": (
-                    "Is `stored_rupees` the amount, in rupees, of money that moved "
-                    "or is scheduled to move? An available balance, a credit limit, "
-                    "or a reward-point count does not count."
+                    "Is `stored_rupees` the available balance, when this SMS only "
+                    "reports a balance, or the amount of money that moved or is "
+                    "scheduled to move? A credit limit, a reward-point count, or "
+                    "an available balance quoted beside a debit or credit does not count."
                 ),
             },
         }
