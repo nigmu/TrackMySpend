@@ -252,7 +252,7 @@ class TestHdfcSmsParser(unittest.TestCase):
             if inr_dot:
                 self.assertEqual(ledger.amount_paisa, parse_amount_paisa(inr_dot.group(1)))
 
-    def test_apply_upserts_or_deletes_the_sms_ledger_row(self):
+    def test_apply_upserts_and_does_not_delete(self):
         by_id = {}
         for category_id, json_kind, body in SAMPLES:
             by_id.setdefault(category_id, (json_kind, body))
@@ -273,11 +273,8 @@ class TestHdfcSmsParser(unittest.TestCase):
 
         conn.reset_mock()
         ignored = classify_sms(by_id["card_otp"][1])
-        apply(conn, 8, ignored.ledger, when)
-        self.assertEqual(conn.execute.call_count, 1)
-        delete_sql, delete_params = conn.execute.call_args_list[0].args
-        self.assertIn("DELETE FROM transactions_sms WHERE raw_sms_id", delete_sql)
-        self.assertEqual(delete_params, (8,))
+        self.assertIsNone(apply(conn, 8, ignored.ledger, when))
+        conn.execute.assert_not_called()
         self.assertNotIn("XXXXXX", repr(ignored))
 
         conn.reset_mock()

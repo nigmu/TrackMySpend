@@ -2,7 +2,7 @@
 
 TrackMySpend records bank alerts from Android SMS.
 
-TMS Companion sends each matching SMS to this API. A new message is stored and classified in the same request. `POST /sms/parse` reclassifies one stored SMS.
+TMS Companion sends each matching SMS to this API. `POST /sms/ingest_and_parse` accepts a message from the phone, classifies a new row, and extracts ledger info before commit. `GET /sms` lists stored SMS records from `raw_sms_data`. `POST /sms/parse` reclassifies one stored raw SMS: if that id is already in the ledger the row is overwritten in place, including hand edits; if it is not, a new row is written. Parse does not delete a ledger row.
 
 The API is a FastAPI service with a PostgreSQL database. The web UI is a separate static site.
 
@@ -16,8 +16,8 @@ The API is a FastAPI service with a PostgreSQL database. The web UI is a separat
 1. TMS Companion receives an SMS on an Android phone.
 2. The phone applies its own local sender filters.
 3. Matching messages are sent to `POST /sms/ingest_and_parse`.
-4. A new SMS: the same request inserts `raw_sms_data`, classifies, writes `transactions_sms` when the classification has a ledger, sets `processing_status`, then commits. A duplicate upload leaves both tables unchanged.
-5. `GET /sms/transactions` lists SMS ledger rows and manual ledger rows. The web **SMS** page shows the raw messages and that ledger.
+4. A new SMS: the same request inserts `raw_sms_data`, classifies, extracts ledger fields when the classification has a ledger, sets `processing_status`, then commits. A duplicate upload leaves both tables unchanged.
+5. `GET /sms` lists the stored rows from `raw_sms_data`. `GET /sms/transactions` lists SMS ledger rows and manual ledger rows. The web **SMS** page shows both.
 
 ## Features
 
@@ -27,8 +27,8 @@ The API is a FastAPI service with a PostgreSQL database. The web UI is a separat
 - `body` is required. The other fields are optional at the API boundary.
 - When `SMS_INGEST_TOKEN` is configured, the request must include the same value in `X-TrackMySpend-Token`.
 - The API hashes the sender, body, and device ID (`content_hash`). A unique index prevents retries and live-vs-inbox reuploads from creating duplicate rows. `received_at` is stored but not part of the hash.
-- A new SMS: the same request inserts `raw_sms_data`, classifies, writes `transactions_sms` when the classification has a ledger, sets `processing_status`, then commits. A duplicate upload leaves both tables unchanged.
-- `GET /sms` returns the stored raw SMS records ordered by `received_at` (newest first), not by insert `id`.
+- A new SMS: the same request inserts `raw_sms_data`, classifies, extracts ledger fields when the classification has a ledger, sets `processing_status`, then commits. A duplicate upload leaves both tables unchanged.
+- `GET /sms` lists stored SMS records from `raw_sms_data`, ordered by `received_at` (newest first), not by insert `id`.
 - `GET /sms/transactions` lists the ledger.
 
 ### SMS ledger
@@ -47,9 +47,9 @@ A `balance_alert` raw SMS is stored as kind `balance`: the available amount, the
 
 `DELETE /sms/transactions/{id}` removes the ledger row and returns `{"status": "deleted", "id": <id>}`. The raw SMS and its processing status stay as they are. A later parse of that raw SMS can insert a new SMS ledger row. A deleted manual row stays deleted.
 
-`POST /sms/parse` takes `{"raw_sms_id": <id>}`. An unknown id is 404. The response is `raw_sms_id`, `processing_status`, and `transaction` (the ledger row, or null).
+`POST /sms/parse` takes `{"raw_sms_id": <id>}`. An unknown id is 404. The response is `raw_sms_id`, `processing_status`, and `transaction` (the ledger row for that raw SMS, or null when none exists).
 
-When that classification has a ledger, the SMS ledger row is updated in place: same `id`, same `created_at`. `kind`, `amount_paisa`, `instrument`, `account_mask`, `counterparty`, `reference`, `template_name`, and `sms_received_at` are replaced. `sms_received_at` goes back to the phone's time. `updated_at` becomes server time. If no ledger row exists yet, one is inserted. When the classification has no ledger, that SMS ledger row is deleted. Hand edits on that row do not survive this call. Manual ledger rows are never involved. There is no bulk reparse.
+Parse classifies that stored raw SMS again. When the classification has a ledger and that raw SMS id is already in `transactions_sms`, the row is overwritten in place: same `id`, same `created_at`. `kind`, `amount_paisa`, `instrument`, `account_mask`, `counterparty`, `reference`, `template_name`, and `sms_received_at` are replaced, including values typed by hand. `sms_received_at` is copied from `raw_sms_data.received_at`. `updated_at` becomes server time. When that id is not in the ledger, a new row is inserted. When the classification has no ledger, parse writes nothing and removes nothing; an existing row stays. A manual ledger row has no `raw_sms_id`, so it is a different row. There is no bulk reparse.
 
 See [TMS Companion documentation](mobile_companion_app/README.md) for Android features, setup, delivery retries, and updates.
 
@@ -146,12 +146,12 @@ Exporting that file and counting rows counts the phone outbox, not `raw_sms_data
 
 ### SMS and logs
 
-- `POST /sms/ingest_and_parse` — receive an SMS from TMS Companion. A new row is stored and classified before commit. A duplicate leaves both tables unchanged.
-- `POST /sms/parse` — reclassify one raw SMS by `raw_sms_id`. Updates that ledger row in place, inserts one if it was missing, or deletes it when the classification has no ledger.
+- `POST /sms/ingest_and_parse` — accept a message from the phone. A new row is classified and its ledger info is extracted before commit. A duplicate leaves both tables unchanged.
+- `POST /sms/parse` — reclassify one stored raw SMS. If that raw SMS id is already in the ledger, overwrite the row in place, including hand edits. If it is not, insert a row when the classification has a ledger. Parse does not delete a ledger row.
 - `POST /sms/transactions` — create a manual ledger row. `template_name` is `manual` and `raw_sms_id` is null.
 - `PATCH /sms/transactions/{id}` — update ledger fields on either row type. `raw_sms_id`, `template_name`, and `created_at` stay as they are. `updated_at` becomes server time.
 - `DELETE /sms/transactions/{id}` — delete a ledger row. The raw SMS is left as it is.
-- `GET /sms` — list raw SMS messages.
+- `GET /sms` — list stored SMS records from `raw_sms_data`.
 - `GET /sms/transactions` — list the SMS ledger.
 - `GET /logs` — list application events. See [Logs](#logs).
 - `POST /logs/event` — phone posts a backfill event. Same token header as SMS ingest when `SMS_INGEST_TOKEN` is set.

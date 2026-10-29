@@ -16,8 +16,8 @@ The API is the main TrackMySpend service (`python main.py`, port **2006**). Ther
 2. The app checks the sender against its local **Filters** list.
 3. A matching message is saved to the durable local outbox before any upload starts. An OTP text is not saved. The Log gets a row labeled `OTP ignored` and nothing is uploaded.
 4. WorkManager sends it to `POST /sms/ingest_and_parse` when a network is available.
-5. A new SMS: the same request inserts `raw_sms_data`, classifies, writes `transactions_sms` when the classification has a ledger (a debit, credit, bill reminder, or balance), sets `processing_status`, then commits. A duplicate upload leaves both tables unchanged.
-6. Delivery details appear in the phone's **Log** tab. Stored messages and server events are available through `GET /sms` and `GET /logs`. `GET /sms/transactions` lists the ledger. The phone does not edit ledger rows.
+5. A new SMS: the same request inserts `raw_sms_data`, classifies, extracts ledger fields when the classification has a ledger (a debit, credit, bill reminder, or balance), sets `processing_status`, then commits. A duplicate upload leaves both tables unchanged.
+6. Delivery details appear in the phone's **Log** tab. `GET /sms` lists stored rows from `raw_sms_data`. `GET /logs` lists server events. `GET /sms/transactions` lists the ledger. The phone does not edit ledger rows.
 
 ## Features
 
@@ -58,10 +58,10 @@ LAN URLs such as `http://<host>:2006` are allowed. Do not add `/sms/ingest_and_p
 
 ### API integration
 
-- **SMS ingestion:** `POST /sms/ingest_and_parse` validates the optional token. A new SMS inserts `raw_sms_data`, classifies, writes `transactions_sms` when the classification has a ledger, sets `processing_status`, then commits. A balance alert is one of those rows, with `kind` `balance`. A duplicate upload leaves both tables unchanged. See the [main README](../README.md#sms-ledger).
+- **SMS ingestion:** `POST /sms/ingest_and_parse` validates the optional token. A new SMS inserts `raw_sms_data`, classifies, extracts ledger fields when the classification has a ledger, sets `processing_status`, then commits. A balance alert is one of those rows, with `kind` `balance`. A duplicate upload leaves both tables unchanged. See the [main README](../README.md#sms-ledger).
 - **Server-side deduplication:** the API hashes the sender, body, and device ID. A unique database index prevents upload retries (and PDU vs inbox timestamp skew) from creating extra rows.
 - **Operational events:** accepted, duplicate, and failed ingestion events are recorded in `app_event_logs` and returned by `GET /logs`.
-- **SMS listing:** `GET /sms` returns paginated raw SMS records for the web SMS page.
+- **SMS listing:** `GET /sms` returns paginated rows from `raw_sms_data` for the web SMS page.
 
 ### App updates
 
@@ -74,11 +74,11 @@ LAN URLs such as `http://<host>:2006` are allowed. Do not add `/sms/ingest_and_p
 ## API routes
 
 - `GET /health` — test API availability.
-- `POST /sms/ingest_and_parse` — accept a message from the phone and classify a new row before commit.
+- `POST /sms/ingest_and_parse` — accept a message from the phone. A new row is classified and its ledger info is extracted before commit.
 - `GET /sms/latest-received-at` — max `received_at` for a `device_id` (watermark; requires ingest token when configured).
-- `GET /sms` — list stored SMS records.
+- `GET /sms` — list stored SMS records from `raw_sms_data`.
 - `GET /sms/transactions` — list the ledger, including manual rows. The phone does not call this.
-- `POST /sms/parse` — reclassify one stored raw SMS by `raw_sms_id`. Updates that ledger row in place, inserts one if it was missing, or deletes it when the classification has no ledger. The phone does not call this.
+- `POST /sms/parse` — reclassify one stored raw SMS. If that raw SMS id is already in the ledger, overwrite the row in place, including hand edits. If it is not, insert a row when the classification has a ledger. Parse does not delete a ledger row. The phone does not call this.
 - `POST /sms/transactions`, `PATCH /sms/transactions/{id}`, `DELETE /sms/transactions/{id}` — create, edit, or delete a ledger row. The phone does not call these. See the [main README](../README.md#sms-ledger).
 - `GET /logs` — list operational events.
 - `POST /logs/event` — companion backfill / ops events (requires ingest token when configured).

@@ -1,7 +1,8 @@
 """Ledger rows in transactions_sms.
 
-Apply upserts or deletes an SMS ledger row. Create, update, and delete
-work by ledger id. This module does not read or update raw_sms_data.
+Apply inserts or overwrites an SMS ledger row. It does not delete.
+Create, update, and delete work by ledger id. This module does not read
+or update raw_sms_data.
 """
 
 from __future__ import annotations
@@ -61,15 +62,13 @@ def get_by_raw(conn: Connection, raw_sms_id: int) -> dict | None:
 
 
 def apply(conn: Connection, raw_sms_id: int, ledger, sms_received_at) -> dict | None:
-    """Upsert the SMS ledger row, or delete it when classification has no ledger.
+    """Insert or overwrite the ledger row for this raw SMS. Never deletes.
 
-    Keeps id and created_at on update. Does not touch a manual ledger row.
+    Keeps id and created_at on update. Overwrites fields even when they were
+    edited by hand. A classification with no ledger writes nothing. A manual
+    row has no raw_sms_id, so it is not this row.
     """
     if ledger is None:
-        conn.execute(
-            "DELETE FROM transactions_sms WHERE raw_sms_id = %s",
-            (raw_sms_id,),
-        )
         return None
     conn.execute(
         """

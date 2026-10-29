@@ -87,7 +87,7 @@ class TestParseStoredSms(unittest.TestCase):
         self.assertIsNone(parse_stored_sms(conn, 9))
         self.assertEqual(conn.execute.call_count, 1)
 
-    def test_info_deletes_the_ledger_row_then_sets_status(self):
+    def test_info_leaves_the_ledger_row_and_sets_status(self):
         conn = MagicMock()
         when = datetime(2026, 10, 11, 8, 30, tzinfo=timezone.utc)
         conn.execute.return_value.fetchone.return_value = {
@@ -97,11 +97,10 @@ class TestParseStoredSms(unittest.TestCase):
         result = parse_stored_sms(conn, 4)
         self.assertEqual(result.processing_status, "done")
         self.assertIsNone(result.ledger)
-        delete_sql, delete_params = conn.execute.call_args_list[1].args
-        self.assertIn("DELETE FROM transactions_sms WHERE raw_sms_id", delete_sql)
-        self.assertEqual(delete_params, (4,))
-        status_sql, status_params = conn.execute.call_args_list[2].args
+        self.assertEqual(conn.execute.call_count, 2)
+        status_sql, status_params = conn.execute.call_args_list[1].args
         self.assertIn("UPDATE raw_sms_data", status_sql)
+        self.assertNotIn("DELETE", status_sql)
         self.assertEqual(status_params, ("done", 4))
 
 
